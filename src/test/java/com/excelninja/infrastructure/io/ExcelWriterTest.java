@@ -1,4 +1,4 @@
-package com.excelninja.infrastructure.persistence;
+package com.excelninja.infrastructure.io;
 
 import com.excelninja.application.facade.NinjaExcel;
 import com.excelninja.domain.annotation.ExcelReadColumn;
@@ -18,7 +18,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("NinjaExcelWriter Tests")
-class NinjaExcelTest {
+class ExcelWriterTest {
 
     static class UserWriteDto {
         @ExcelWriteColumn(headerName = "ID", order = 1)
@@ -27,16 +27,21 @@ class NinjaExcelTest {
         private final String name;
         @ExcelWriteColumn(headerName = "Age", order = 3)
         private final Integer age;
+        @ExcelWriteColumn(headerName = "Score", order = 4)
+        private final Double score;
+
         private final String ignore;
 
         public UserWriteDto(
                 Long id,
                 String name,
-                Integer age
+                Integer age,
+                Double score
         ) {
             this.id = id;
             this.name = name;
             this.age = age;
+            this.score = score;
             this.ignore = "This field should be ignored";
         }
 
@@ -50,6 +55,8 @@ class NinjaExcelTest {
         private  String name;
         @ExcelReadColumn(headerName = "Age")
         private  Integer age;
+        @ExcelWriteColumn(headerName = "Score")
+        private Double score;
 
         public UserReadDto() {}
 
@@ -68,11 +75,13 @@ class NinjaExcelTest {
         public UserReadDto(
                 Long id,
                 String name,
-                Integer age
+                Integer age,
+                Double score
         ) {
             this.id = id;
             this.name = name;
             this.age = age;
+            this.score = score;
         }
 
     }
@@ -82,15 +91,14 @@ class NinjaExcelTest {
     @DisplayName("Write Excel via NinjaExcel")
     void write_and_read_excel_via_NinjaExcel() throws Exception {
         var usersToWrite = List.of(
-                new UserWriteDto(1L, "Alice123#!@#!@3", 30),
-                new UserWriteDto(2L, "Bob", 25)
+                new UserWriteDto(1L, "Alice123#!@#!@3", 30, 95.5),
+                new UserWriteDto(2L, "Bob", 25, 88.0)
         );
 
         var usersToRead = List.of(
-                new UserReadDto(1L, "Alice123#!@#!@3", 30),
-                new UserReadDto(2L, "Bob", 25)
+                new UserReadDto(1L, "Alice123#!@#!@3", 30, 95.5),
+                new UserReadDto(2L, "Bob", 25, 88.0)
         );
-
 
 
         var byteArrayOutputStream = new ByteArrayOutputStream();

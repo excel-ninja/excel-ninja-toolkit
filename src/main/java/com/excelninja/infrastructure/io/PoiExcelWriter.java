@@ -1,7 +1,8 @@
-package com.excelninja.infrastructure.persistence;
+package com.excelninja.infrastructure.io;
 
 import com.excelninja.application.port.ConverterPort;
 import com.excelninja.domain.model.ExcelDocument;
+import com.excelninja.domain.port.ExcelWriter;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
@@ -9,7 +10,9 @@ import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-public class PoiExcelWriter {
+public class PoiExcelWriter implements ExcelWriter {
+
+    @Override
     public void write(
             ExcelDocument doc,
             OutputStream out,
