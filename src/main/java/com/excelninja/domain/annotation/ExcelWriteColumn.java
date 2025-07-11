@@ -7,7 +7,7 @@ import java.lang.annotation.Target;
 
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface ExcelColumn {
+public @interface ExcelWriteColumn {
     String headerName();           // 헤더명
     int order() default Integer.MAX_VALUE;
 }
