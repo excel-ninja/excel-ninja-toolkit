@@ -1,6 +1,7 @@
-package com.excelninja.infrastructure.persistence;
+package com.excelninja.infrastructure.io;
 
 import com.excelninja.domain.model.ExcelDocument;
+import com.excelninja.domain.port.ExcelReader;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
@@ -13,13 +14,16 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PoiExcelReader {
+public class PoiExcelReader implements ExcelReader {
+
+    @Override
     public ExcelDocument read(File file) throws IOException {
         try (var is = new FileInputStream(file)) {
             return read(is);
         }
     }
 
+    @Override
     public ExcelDocument read(InputStream inputStream) throws IOException {
         try (var workbook = new XSSFWorkbook(inputStream)) {
             var sheet = workbook.getSheetAt(0);
