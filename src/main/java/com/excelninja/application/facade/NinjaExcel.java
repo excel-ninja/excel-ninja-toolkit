@@ -33,7 +33,7 @@ public final class NinjaExcel {
             ExcelDocument document,
             String fileName
     ) {
-        try (var out = new FileOutputStream(fileName)) {
+        try (FileOutputStream out = new FileOutputStream(fileName)) {
             write(document, out);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -45,7 +45,7 @@ public final class NinjaExcel {
             Class<T> clazz
     ) {
         try {
-            var document = READER.read(file);
+            ExcelDocument document = READER.read(file);
             return document.toDTO(clazz, CONVERTER);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -54,14 +54,13 @@ public final class NinjaExcel {
 
     static {
         logger.info(
-                """
-                   ██████      / /
-                        █████████ / /         
-                      █  ───  ───  █/          
-                       ██████████            
-                           ██████ /              
-           ─────██───────██─────
-           🥷  E X C E L - N I N J A
-           """);
+                "   ██████      / /\n" +
+                        "        █████████ / /         \n" +
+                        "      █  ───  ───  █/          \n" +
+                        "       ██████████            \n" +
+                        "           ██████ /              \n" +
+                        "─────██───────██─────\n" +
+                        "🥷  E X C E L - N I N J A"
+        );
     }
 }

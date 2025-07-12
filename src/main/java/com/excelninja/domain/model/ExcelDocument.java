@@ -23,10 +23,10 @@ public class ExcelDocument {
             Map<Integer, Short> rowHeights
     ) {
         this.sheetName = Objects.requireNonNull(sheetName);
-        this.headers = List.copyOf(Objects.requireNonNull(headers));
-        this.rows = List.copyOf(Objects.requireNonNull(rows));
-        this.columnWidths = Map.copyOf(Objects.requireNonNull(columnWidths));
-        this.rowHeights = Map.copyOf(Objects.requireNonNull(rowHeights));
+        this.headers = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(headers)));
+        this.rows = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(rows)));
+        this.columnWidths = Collections.unmodifiableMap(new HashMap<>(Objects.requireNonNull(columnWidths)));
+        this.rowHeights = Collections.unmodifiableMap(new HashMap<>(Objects.requireNonNull(rowHeights)));
     }
 
     public String getSheetName() {
@@ -67,23 +67,24 @@ public class ExcelDocument {
             return this;
         }
 
-        public Builder headers(List<String> headers) {
-            Objects.requireNonNull(headers);
+        public Builder headers(List<String> headerList) {
+            Objects.requireNonNull(headerList);
             this.headers.clear();
-            this.headers.addAll(headers);
+            this.headers.addAll(headerList);
             return this;
         }
 
-        public Builder rows(List<List<Object>> rowValues) {
-            for (var rowValue : rowValues) {
-                Objects.requireNonNull(rowValue);
-                if (rowValue.size() != headers.size()) {
-                    throw new IllegalArgumentException("Row values size (" + rowValue.size() + ") does not match header count (" + headers.size() + ")");
+        public Builder rows(List<List<Object>> rowValuesList) {
+            for (List<Object> rowValues : rowValuesList) {
+                Objects.requireNonNull(rowValues);
+                if (rowValues.size() != headers.size()) {
+                    throw new IllegalArgumentException("Row values size (" + rowValues.size() + ") does not match header count (" + headers.size() + ")");
                 }
-                this.rows.add(new ArrayList<>(rowValue));
+                this.rows.add(new ArrayList<>(rowValues));
             }
             return this;
         }
+
         public ExcelDocument build() {
             return new ExcelDocument(sheetName, headers, rows, columnWidths, rowHeights);
         }
@@ -96,90 +97,93 @@ public class ExcelDocument {
         if (dataTransferObjects == null || dataTransferObjects.isEmpty()) {
             throw new IllegalArgumentException("DTO list cannot be null or empty");
         }
-        var clazz = dataTransferObjects.getFirst().getClass();
+        Class<?> dtoClass = dataTransferObjects.get(0).getClass();
 
-        List<Field> fields = Arrays.stream(clazz.getDeclaredFields())
-                .filter(f -> f.isAnnotationPresent(ExcelWriteColumn.class))
-                .sorted(Comparator.comparingInt(f -> f.getAnnotation(ExcelWriteColumn.class).order()))
-                .toList();
-
-        var headers = fields.stream()
-                .map(f -> f.getAnnotation(ExcelWriteColumn.class).headerName())
+        List<Field> annotatedFields = Arrays.stream(dtoClass.getDeclaredFields())
+                .filter(field -> field.isAnnotationPresent(ExcelWriteColumn.class))
+                .sorted(Comparator.comparingInt(field -> field.getAnnotation(ExcelWriteColumn.class).order()))
                 .collect(Collectors.toList());
 
-        var rows = new ArrayList<List<Object>>();
-        for (var dto : dataTransferObjects) {
-            var row = new ArrayList<>();
-            for (var field : fields) {
+        List<String> headerList = annotatedFields.stream()
+                .map(field -> field.getAnnotation(ExcelWriteColumn.class).headerName())
+                .collect(Collectors.toList());
+
+        List<List<Object>> rowsList = new ArrayList<>();
+        for (T dtoInstance : dataTransferObjects) {
+            List<Object> rowList = new ArrayList<>();
+            for (Field field : annotatedFields) {
                 field.setAccessible(true);
                 try {
-                    row.add(field.get(dto));
-                } catch (IllegalAccessException e) {
-                    row.add(null);
+                    rowList.add(field.get(dtoInstance));
+                } catch (IllegalAccessException exception) {
+                    rowList.add(null);
                 }
             }
-            rows.add(row);
+            rowsList.add(rowList);
         }
 
-        var actualSheetName = sheetNames.length > 0 ? sheetNames[0] : clazz.getSimpleName();
+        String actualSheetName = sheetNames.length > 0 ? sheetNames[0] : dtoClass.getSimpleName();
         return ExcelDocument.builder()
                 .sheet(actualSheetName)
-                .headers(headers)
-                .rows(rows)
+                .headers(headerList)
+                .rows(rowsList)
                 .build();
     }
 
     public <T> List<T> toDTO(
-            Class<T> clazz,
+            Class<T> dtoClass,
             ConverterPort converter
     ) {
-        var result = new ArrayList<T>();
-        var headers = this.getHeaders();
+        List<T> resultList = new ArrayList<T>();
+        List<String> excelHeaders = this.getHeaders();
 
-        var fields = new ArrayList<Field>();
-        for (var field : clazz.getDeclaredFields()) {
+        List<Field> annotatedFields = new ArrayList<Field>();
+        for (Field field : dtoClass.getDeclaredFields()) {
             if (field.isAnnotationPresent(ExcelReadColumn.class)) {
-                fields.add(field);
+                annotatedFields.add(field);
             }
         }
-        if (fields.isEmpty()) {
-            throw new IllegalArgumentException(clazz.getSimpleName() + " has no @NinjaExcelRead fields");
+
+        if (annotatedFields.isEmpty()) {
+            throw new IllegalArgumentException(dtoClass.getSimpleName() + " has no @ExcelReadColumn fields");
         }
 
-        var fieldToColIdx = new ArrayList<Integer>();
-        for (var field : fields) {
-            var annotation = field.getAnnotation(ExcelReadColumn.class);
+        List<Integer> fieldToColumnIndex = new ArrayList<Integer>();
+        for (Field field : annotatedFields) {
+            ExcelReadColumn annotation = field.getAnnotation(ExcelReadColumn.class);
             String headerName = annotation.headerName();
-            int idx = headers.indexOf(headerName);
-            if (idx == -1) {
+            int headerIndex = excelHeaders.indexOf(headerName);
+            if (headerIndex == -1) {
                 throw new IllegalArgumentException("Header [" + headerName + "] not found in Excel headers");
             }
-            fieldToColIdx.add(idx);
+            fieldToColumnIndex.add(headerIndex);
         }
 
-        for (var row : this.getRows()) {
+        for (List<Object> rowData : this.getRows()) {
             try {
-                T dto = clazz.getDeclaredConstructor().newInstance();
-                for (int i = 0; i < fields.size(); i++) {
-                    var field = fields.get(i);
-                    var colIdx = fieldToColIdx.get(i);
+                T dtoInstance = dtoClass.getDeclaredConstructor().newInstance();
+                for (int i = 0; i < annotatedFields.size(); i++) {
+                    Field field = annotatedFields.get(i);
+                    int columnIndex = fieldToColumnIndex.get(i);
 
-                    var cellValue = row.get(colIdx);
-                    // 어노테이션에 type, defaultValue 있으면 우선 적용
-                    var annotation = field.getAnnotation(ExcelReadColumn.class);
-                    var targetType = annotation.type() == Void.class ? field.getType() : annotation.type();
-                    var valueToSet = cellValue != null
-                            ? converter.convert(cellValue, targetType)
-                            : annotation.defaultValue().isEmpty() ? null : converter.convert(annotation.defaultValue(), targetType);
+                    Object cellValue = rowData.get(columnIndex);
+                    ExcelReadColumn annotation = field.getAnnotation(ExcelReadColumn.class);
+                    Class<?> targetType = annotation.type() == Void.class ? field.getType() : annotation.type();
+                    Object valueToSet = null;
+                    if (cellValue != null) {
+                        valueToSet = converter.convert(cellValue, targetType);
+                    } else if (!annotation.defaultValue().isEmpty()) {
+                        valueToSet = converter.convert(annotation.defaultValue(), targetType);
+                    }
 
                     field.setAccessible(true);
-                    field.set(dto, valueToSet);
+                    field.set(dtoInstance, valueToSet);
                 }
-                result.add(dto);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to map row to DTO", e);
+                resultList.add(dtoInstance);
+            } catch (Exception exception) {
+                throw new RuntimeException("Failed to map row to DTO", exception);
             }
         }
-        return result;
+        return resultList;
     }
 }

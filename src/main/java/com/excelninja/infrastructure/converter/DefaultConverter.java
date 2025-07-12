@@ -13,7 +13,8 @@ public class DefaultConverter implements ConverterPort {
             return null;
         }
 
-        if (rawValue instanceof Number num) {
+        if (rawValue instanceof Number) {
+            Number num = (Number) rawValue;
             if (targetType == int.class || targetType == Integer.class) {
                 return num.intValue();
             }

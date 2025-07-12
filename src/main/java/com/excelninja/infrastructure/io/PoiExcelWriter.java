@@ -4,9 +4,10 @@ import com.excelninja.application.port.ConverterPort;
 import com.excelninja.domain.model.ExcelDocument;
 import com.excelninja.domain.port.ExcelWriter;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.*;
 
 import java.io.OutputStream;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -18,10 +19,12 @@ public class PoiExcelWriter implements ExcelWriter {
             OutputStream out,
             ConverterPort converter
     ) {
-        try (var workbook = new XSSFWorkbook()) {
-            var sheet = workbook.createSheet(doc.getSheetName());
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
 
-            var headerStyle = workbook.createCellStyle();
+            XSSFSheet sheet = workbook.createSheet(doc.getSheetName());
+
+            XSSFCellStyle headerStyle = workbook.createCellStyle();
+
             headerStyle.setBorderTop(BorderStyle.THIN);
             headerStyle.setBorderBottom(BorderStyle.THIN);
             headerStyle.setBorderLeft(BorderStyle.THIN);
@@ -35,7 +38,8 @@ public class PoiExcelWriter implements ExcelWriter {
             headerStyle.setAlignment(HorizontalAlignment.CENTER);
             headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-            var dataStyle = workbook.createCellStyle();
+            XSSFCellStyle dataStyle = workbook.createCellStyle();
+
             dataStyle.setBorderTop(BorderStyle.THIN);
             dataStyle.setBorderBottom(BorderStyle.THIN);
             dataStyle.setBorderLeft(BorderStyle.THIN);
@@ -46,43 +50,51 @@ public class PoiExcelWriter implements ExcelWriter {
             dataStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
             dataStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-            var headerRow = sheet.createRow(0);
+            XSSFRow headerRow = sheet.createRow(0);
+
             headerRow.setHeightInPoints(20);
-            var ci = new AtomicInteger();
+            AtomicInteger columnIndex = new AtomicInteger();
             doc.getHeaders().forEach(title -> {
-                var cell = headerRow.createCell(ci.getAndIncrement(), CellType.STRING);
+                XSSFCell cell = headerRow.createCell(columnIndex.getAndIncrement(), CellType.STRING);
                 cell.setCellValue(title);
                 cell.setCellStyle(headerStyle);
             });
 
-            var ri = new AtomicInteger(1);
-            for (var rowValues : doc.getRows()) {
-                var row = sheet.createRow(ri.getAndIncrement());
-                var cj = new AtomicInteger();
+            AtomicInteger rowIndex = new AtomicInteger(1);
+            for (List<Object> rowValues : doc.getRows()) {
+                XSSFRow row = sheet.createRow(rowIndex.getAndIncrement());
+                AtomicInteger cellIndex = new AtomicInteger();
                 rowValues.forEach(raw -> {
-                    var cell = row.createCell(cj.getAndIncrement());
-                    var val = converter.convert(raw, raw != null ? raw.getClass() : String.class);
-                    switch (val) {
-                        case Number n -> cell.setCellValue(n.doubleValue());
-                        case Boolean b -> cell.setCellValue(b);
-                        case null -> cell.setCellValue("");
-                        default -> cell.setCellValue(val.toString());
+                    XSSFCell cell = row.createCell(cellIndex.getAndIncrement());
+                    Object val = converter.convert(raw, raw != null ? raw.getClass() : String.class);
+                    if (val == null) {
+                        cell.setCellValue("");
+                    } else if (val instanceof Number) {
+                        Number numberValue = (Number) val;
+                        cell.setCellValue(numberValue.doubleValue());
+                    } else if (val instanceof Boolean) {
+                        Boolean booleanValue = (Boolean) val;
+                        cell.setCellValue(booleanValue);
+                    } else {
+                        cell.setCellValue(val.toString());
                     }
                     cell.setCellStyle(dataStyle);
                 });
             }
 
-            IntStream.range(0, doc.getHeaders().size()).forEach(c -> {
-                if (doc.getColumnWidths().containsKey(c)) {
-                    sheet.setColumnWidth(c, doc.getColumnWidths().get(c));
+            IntStream.range(0, doc.getHeaders().size()).forEach(column -> {
+                if (doc.getColumnWidths().containsKey(column)) {
+                    sheet.setColumnWidth(column, doc.getColumnWidths().get(column));
                 } else {
-                    sheet.autoSizeColumn(c);
+                    sheet.autoSizeColumn(column);
                 }
             });
 
-            doc.getRowHeights().forEach((r, h) -> {
-                var row = sheet.getRow(r);
-                if (row != null) row.setHeight(h);
+            doc.getRowHeights().forEach((rowNumber, height) -> {
+                XSSFRow row = sheet.getRow(rowNumber);
+                if (row != null) {
+                    row.setHeight(height);
+                }
             });
 
             workbook.write(out);

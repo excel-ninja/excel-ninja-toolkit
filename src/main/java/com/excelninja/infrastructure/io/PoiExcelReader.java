@@ -12,61 +12,77 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 public class PoiExcelReader implements ExcelReader {
 
     @Override
-    public ExcelDocument read(File file) throws IOException {
-        try (var is = new FileInputStream(file)) {
-            return read(is);
+    public ExcelDocument read(File excelFile) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile)) {
+            return read(fileInputStream);
         }
     }
 
     @Override
     public ExcelDocument read(InputStream inputStream) throws IOException {
-        try (var workbook = new XSSFWorkbook(inputStream)) {
-            var sheet = workbook.getSheetAt(0);
-            var sheetName = sheet.getSheetName();
-            var rowIterator = sheet.iterator();
+        try (XSSFWorkbook workbook = new XSSFWorkbook(inputStream)) {
+            org.apache.poi.ss.usermodel.Sheet firstSheet = workbook.getSheetAt(0);
+            String sheetName = firstSheet.getSheetName();
+            Iterator<Row> rowIterator = firstSheet.iterator();
 
             if (!rowIterator.hasNext()) {
                 throw new IllegalArgumentException("Excel sheet is empty");
             }
-            var headerRow = rowIterator.next();
-            var headers = new ArrayList<String>();
-            for (var cell : headerRow) {
-                headers.add(cell.getStringCellValue());
+
+            Row headerRow = rowIterator.next();
+            List<String> headerTitles = new ArrayList<String>();
+            for (Cell cell : headerRow) {
+                headerTitles.add(cell.getStringCellValue());
             }
 
-            var rows = new ArrayList<List<Object>>();
+            List<List<Object>> dataRows = new ArrayList<List<Object>>();
             while (rowIterator.hasNext()) {
-                var row = rowIterator.next();
-                var rowValues = new ArrayList<Object>();
-                for (int i = 0; i < headers.size(); i++) {
-                    var cell = row.getCell(i, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-                    rowValues.add(getCellValue(cell));
+                Row currentRow = rowIterator.next();
+                List<Object> rowValues = new ArrayList<Object>();
+                for (int columnIndex = 0; columnIndex < headerTitles.size(); columnIndex++) {
+                    Cell cell = currentRow.getCell(columnIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+                    Object cellValue = extractCellValue(cell);
+                    rowValues.add(cellValue);
                 }
-                rows.add(rowValues);
+                dataRows.add(rowValues);
             }
 
             return ExcelDocument.builder()
                     .sheet(sheetName)
-                    .headers(headers)
-                    .rows(rows)
+                    .headers(headerTitles)
+                    .rows(dataRows)
                     .build();
         }
     }
 
-    private Object getCellValue(Cell cell) {
-        if (cell == null) return null;
-        return switch (cell.getCellType()) {
-            case STRING -> cell.getStringCellValue();
-            case NUMERIC -> DateUtil.isCellDateFormatted(cell) ? cell.getDateCellValue() : cell.getNumericCellValue();
-            case BOOLEAN -> cell.getBooleanCellValue();
-            case FORMULA -> cell.getCellFormula();
-            case BLANK -> null;
-            default -> cell.toString();
-        };
+    private Object extractCellValue(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getDateCellValue();
+                } else {
+                    return cell.getNumericCellValue();
+                }
+            case BOOLEAN:
+                return cell.getBooleanCellValue();
+            case FORMULA:
+                return cell.getCellFormula();
+            case BLANK:
+                return null;
+            default:
+                return cell.toString();
+        }
     }
 }
