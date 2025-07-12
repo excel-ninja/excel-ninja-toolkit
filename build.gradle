@@ -9,8 +9,13 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(23)
     }
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
 }
 
+tasks.withType(JavaCompile).configureEach {
+    options.release.set(8)
+}
 repositories {
     mavenCentral()
 }
@@ -20,13 +25,13 @@ dependencies {
     testImplementation("org.assertj:assertj-core:3.25.3")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    implementation("org.apache.poi:poi:5.2.3")
-    implementation("org.apache.poi:poi-ooxml:5.2.3")
-    implementation 'org.apache.logging.log4j:log4j-api:2.23.1'
-     runtimeOnly 'org.apache.logging.log4j:log4j-core:2.23.1' // 필요하면 추가
 
+    implementation "org.apache.poi:poi:4.1.2"
+    implementation "org.apache.poi:poi-ooxml:4.1.2"
+
+    implementation 'org.apache.logging.log4j:log4j-api:2.17.2'
+    runtimeOnly 'org.apache.logging.log4j:log4j-core:2.17.2'
 }
-
 
 tasks.named('test') {
     useJUnitPlatform()
