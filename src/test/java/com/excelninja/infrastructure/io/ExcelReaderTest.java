@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.net.URISyntaxException;
+import java.util.List;
 
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 
@@ -27,10 +28,10 @@ class ExcelReaderTest {
     @DisplayName("Read valid Excel file and return correct document")
     void readValidExcelFile() throws URISyntaxException {
 
-        var file = new File(getClass().getClassLoader().getResource("users_test.xlsx").toURI());
-        var readDTO = NinjaExcel.read(file, UserReadDto.class);
+        File file = new File(getClass().getClassLoader().getResource("users_test.xlsx").toURI());
+        List<UserReadDto> readDTO = NinjaExcel.read(file, UserReadDto.class);
 
-        var dto = readDTO.getFirst();
+        UserReadDto dto = readDTO.get(0);
         assertThat(dto).isNotNull();
         assertThat(dto.id).isEqualTo(1L);
         assertThat(dto.name).isEqualTo("Alice123#!@#!@3");
