@@ -5,7 +5,7 @@ plugins {
     id 'com.vanniktech.maven.publish' version '0.30.0'
 }
 
-group = 'io.github.ninja-excel'
+group = 'io.github.excel-ninja'
 version = '0.0.1'
 
 java {
