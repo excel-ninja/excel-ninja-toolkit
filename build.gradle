@@ -1,9 +1,10 @@
 plugins {
     id 'java'
+    id 'com.vanniktech.maven.publish' version '0.29.0'
 }
 
-group = 'com.mockninja'
-version = '0.0.1-SNAPSHOT'
+group = 'io.github.ninja-excel'
+version = '0.0.1'
 
 java {
     toolchain {
@@ -11,23 +12,22 @@ java {
     }
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
+    withSourcesJar()
+    withJavadocJar()
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.release.set(8)
-}
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
-    testImplementation("org.assertj:assertj-core:3.25.3")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
 
-    implementation "org.apache.poi:poi:4.1.2"
-    implementation "org.apache.poi:poi-ooxml:4.1.2"
+    testImplementation("org.assertj:assertj-core:3.25.3")
+
+    implementation 'org.apache.poi:poi:4.1.2'
+    implementation 'org.apache.poi:poi-ooxml:4.1.2'
 
     implementation 'org.apache.logging.log4j:log4j-api:2.17.2'
     runtimeOnly 'org.apache.logging.log4j:log4j-core:2.17.2'
@@ -35,4 +35,37 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+mavenPublishing {
+    pom {
+        name.set('Ninja Excel Toolkit')
+        description.set('A comprehensive Java toolkit for Excel based on Apache POI')
+        inceptionYear.set('2025')
+        url.set('https://github.com/excel-ninja/excel-ninja-toolkit')
+
+        licenses {
+            license {
+                name.set('The Apache License, Version 2.0')
+                url.set('https://www.apache.org/licenses/LICENSE-2.0.txt')
+            }
+        }
+
+        developers {
+            developer {
+                id.set('bzhs1992')
+                name.set('Hyunsoo Jo')
+                email.set('bzhs1992@icloud.com')
+            }
+        }
+
+        scm {
+            connection.set('scm:git:git://github.com/excel-ninja/excel-ninja-toolkit.git')
+            developerConnection.set('scm:git:ssh://github.com/excel-ninja/excel-ninja-toolkit.git')
+            url.set('https://github.com/excel-ninja/excel-ninja-toolkit')
+        }
+    }
+
+    publishToMavenCentral()
+    signAllPublications()
 }
