@@ -7,7 +7,7 @@ Built on top of Apache POI, it allows easy conversion between DTOs and Excel doc
 
 As an open-source project, ExcelNinja welcomes contributions and improvements.  
 If you find any issues or have ideas to make it better, feel free to open a pull request or issue.  
-Together, let's make Excel handling in Java sharper and faster — like a "ninja". 🥷
+Together, let's make Excel handling in Java sharper and faster — like a "ninja".
 
 ---
 
@@ -34,7 +34,7 @@ Together, let's make Excel handling in Java sharper and faster — like a "ninja
 
 ```groovy
 dependencies {
-    implementation "com.github.yourusername:excel-ninja:1.0.0"
+    implementation 'io.github.excel-ninja:excelNinja:0.0.1'
 }
 ```
 
