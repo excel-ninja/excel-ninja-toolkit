@@ -96,7 +96,6 @@ public class PoiExcelWriter implements ExcelWriter {
                     row.setHeight(height);
                 }
             });
-
             workbook.write(out);
         } catch (Exception e) {
             throw new RuntimeException("Failed to write Excel file", e);

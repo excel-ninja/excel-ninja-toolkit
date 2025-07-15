@@ -36,5 +36,13 @@ class ExcelReaderTest {
         assertThat(dto.id).isEqualTo(1L);
         assertThat(dto.name).isEqualTo("Alice123#!@#!@3");
         assertThat(dto.age).isEqualTo(30);
+
+        UserReadDto dto2 = readDTO.get(1);
+        assertThat(dto2).isNotNull();
+        assertThat(dto2.id).isEqualTo(2L);
+        assertThat(dto2.name).isEqualTo("Bob");
+        assertThat(dto2.age).isEqualTo(25);
+
+        assertThat(readDTO).hasSize(2);
     }
 }

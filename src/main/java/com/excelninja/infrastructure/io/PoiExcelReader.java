@@ -1,5 +1,6 @@
 package com.excelninja.infrastructure.io;
 
+import com.excelninja.domain.exception.InvalidDocumentStructureException;
 import com.excelninja.domain.model.ExcelDocument;
 import com.excelninja.domain.port.ExcelReader;
 import org.apache.poi.ss.usermodel.Cell;
@@ -32,25 +33,33 @@ public class PoiExcelReader implements ExcelReader {
             Iterator<Row> rowIterator = firstSheet.iterator();
 
             if (!rowIterator.hasNext()) {
-                throw new IllegalArgumentException("Excel sheet is empty");
+                throw new InvalidDocumentStructureException("Excel sheet is empty");
             }
 
             Row headerRow = rowIterator.next();
-            List<String> headerTitles = new ArrayList<String>();
+            List<String> headerTitles = new ArrayList<>();
             for (Cell cell : headerRow) {
-                headerTitles.add(cell.getStringCellValue());
+                String headerValue = cell.getStringCellValue();
+                if (headerValue == null || headerValue.trim().isEmpty()) {
+                    throw new InvalidDocumentStructureException("Header cannot be empty at column " + cell.getColumnIndex());
+                }
+                headerTitles.add(headerValue.trim());
             }
 
-            List<List<Object>> dataRows = new ArrayList<List<Object>>();
+            List<List<Object>> dataRows = new ArrayList<>();
+            int rowIndex = 1;
             while (rowIterator.hasNext()) {
                 Row currentRow = rowIterator.next();
-                List<Object> rowValues = new ArrayList<Object>();
+                List<Object> rowValues = new ArrayList<>();
+
                 for (int columnIndex = 0; columnIndex < headerTitles.size(); columnIndex++) {
                     Cell cell = currentRow.getCell(columnIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
                     Object cellValue = extractCellValue(cell);
                     rowValues.add(cellValue);
                 }
+
                 dataRows.add(rowValues);
+                rowIndex++;
             }
 
             return ExcelDocument.builder()

@@ -8,6 +8,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ExcelWriteColumn {
-    String headerName();           // 헤더명
+    String headerName();
     int order() default Integer.MAX_VALUE;
 }
