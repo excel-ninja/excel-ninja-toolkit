@@ -30,10 +30,10 @@ class ReflectionUtilsTest {
         Field field = getField(TestDtoWithSetter.class, "name");
 
         // When
-        ReflectionUtils.setFieldValue(dto, field, "John");
+        ReflectionUtils.setFieldValue(dto, field, "Hyunsoo");
 
         // Then
-        assertThat(dto.getName()).isEqualTo("John");
+        assertThat(dto.getName()).isEqualTo("Hyunsoo");
         assertThat(dto.setterCalled).isTrue();
     }
 
@@ -111,6 +111,7 @@ class ReflectionUtilsTest {
                 .hasMessageContaining("Unexpected error setting field: finalValue");
     }
 
+
     @Test
     @DisplayName("타입 불일치 시 예외 발생")
     void setFieldValueWithWrongTypeThrowsException() {
@@ -167,7 +168,8 @@ class ReflectionUtilsTest {
         assertThat(dto1.getName()).isEqualTo("First");
         assertThat(dto2.getName()).isEqualTo("Second");
         assertThat(cacheCountAfterFirst).isEqualTo(1);
-        assertThat(cacheCountAfterSecond).isEqualTo(1); // 캐시된 메서드 재사용
+        // cached value
+        assertThat(cacheCountAfterSecond).isEqualTo(1);
     }
 
     @Test
@@ -240,11 +242,11 @@ class ReflectionUtilsTest {
     }
 
     public static class TestDtoWithoutSetter {
-        public String name; // public으로 직접 접근 가능
+        public String name;
     }
 
     public static class TestDtoWithoutGetter {
-        public String name; // public으로 직접 접근 가능
+        public String name;
     }
 
     public static class TestDtoWithFinalField {
