@@ -1,0 +1,42 @@
+name: 📋 Custom Issue
+description: Create a custom issue for other purposes
+title: "[CUSTOM] "
+labels: ["needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for issues that don't fit into other categories.
+
+  - type: input
+    id: issue-type
+    attributes:
+      label: 📝 Issue Type
+      description: What type of issue is this?
+      placeholder: e.g., Question, Discussion, Proposal
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 📋 Description
+      description: Provide a detailed description of your issue
+      placeholder: Describe your issue...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 🔍 Context
+      description: Provide any relevant context or background information
+      placeholder: Additional context...
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📝 Additional Information
+      description: Any other information you'd like to share
+      placeholder: Any additional information...
