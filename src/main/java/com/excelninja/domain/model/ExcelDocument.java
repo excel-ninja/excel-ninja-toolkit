@@ -4,6 +4,7 @@ import com.excelninja.application.port.ConverterPort;
 import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
 import com.excelninja.domain.exception.*;
+import com.excelninja.infrastructure.util.ReflectionUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -148,25 +149,7 @@ public class ExcelDocument {
             throw EntityMappingException.noAnnotatedFields(dtoClass);
         }
 
-        Set<Integer> usedOrders = new HashSet<>();
-        Set<String> usedHeaders = new HashSet<>();
-
-        for (Field field : annotatedFields) {
-            ExcelWriteColumn annotation = field.getAnnotation(ExcelWriteColumn.class);
-            String headerName = annotation.headerName();
-            if (headerName == null || headerName.trim().isEmpty()) {
-                throw EntityMappingException.invalidAnnotationConfiguration(dtoClass, "Empty header name in field: " + field.getName());
-            }
-
-            if (!usedHeaders.add(headerName)) {
-                throw EntityMappingException.invalidAnnotationConfiguration(dtoClass, "Duplicate header name: " + headerName);
-            }
-
-            int order = annotation.order();
-            if (order >= 0 && order != Integer.MAX_VALUE && !usedOrders.add(order)) {
-                throw EntityMappingException.invalidAnnotationConfiguration(dtoClass, "Duplicate order value: " + order);
-            }
-        }
+        validateWriteAnnotations(annotatedFields, dtoClass);
 
         annotatedFields.sort(Comparator.comparingInt(field -> field.getAnnotation(ExcelWriteColumn.class).order()));
 
@@ -178,11 +161,11 @@ public class ExcelDocument {
         for (T dtoInstance : dataTransferObjects) {
             List<Object> rowList = new ArrayList<>();
             for (Field field : annotatedFields) {
-                field.setAccessible(true);
                 try {
-                    rowList.add(field.get(dtoInstance));
-                } catch (IllegalAccessException exception) {
-                    throw new DocumentConversionException(field.getName(), null, "Cannot access field value: " + exception.getMessage());
+                    Object value = ReflectionUtils.getFieldValue(dtoInstance, field);
+                    rowList.add(value);
+                } catch (DocumentConversionException e) {
+                    throw new DocumentConversionException("Failed to read field '" + field.getName() + "' from " + dtoClass.getSimpleName() + ": " + e.getMessage(), e);
                 }
             }
             rowsList.add(rowList);
@@ -211,21 +194,7 @@ public class ExcelDocument {
             throw EntityMappingException.noAnnotatedFields(dtoClass);
         }
 
-        List<Integer> fieldToColumnIndex = new ArrayList<>();
-        for (Field field : annotatedFields) {
-            ExcelReadColumn annotation = field.getAnnotation(ExcelReadColumn.class);
-            String headerName = annotation.headerName();
-
-            if (headerName == null || headerName.trim().isEmpty()) {
-                throw EntityMappingException.invalidAnnotationConfiguration(dtoClass, "Empty header name in field: " + field.getName());
-            }
-
-            int headerIndex = excelHeaders.indexOf(headerName);
-            if (headerIndex == -1) {
-                throw HeaderMismatchException.headerNotFound(headerName);
-            }
-            fieldToColumnIndex.add(headerIndex);
-        }
+        List<Integer> fieldToColumnIndex = validateAndMapHeaders(annotatedFields, excelHeaders, dtoClass);
 
         for (int rowIdx = 0; rowIdx < this.getRows().size(); rowIdx++) {
             List<Object> rowData = this.getRows().get(rowIdx);
@@ -248,33 +217,75 @@ public class ExcelDocument {
                             valueToSet = converter.convert(annotation.defaultValue(), targetType);
                         }
                     } catch (Exception conversionException) {
-                        throw new DocumentConversionException(field.getName(), cellValue,
-                                "Type conversion failed: " + conversionException.getMessage());
+                        throw new DocumentConversionException(field.getName(), cellValue, "Type conversion failed: " + conversionException.getMessage());
                     }
 
-                    field.setAccessible(true);
                     try {
-                        field.set(dtoInstance, valueToSet);
-                    } catch (IllegalAccessException e) {
-                        throw new DocumentConversionException(field.getName(), valueToSet, "Cannot set field value: " + e.getMessage());
+                        ReflectionUtils.setFieldValue(dtoInstance, field, valueToSet);
+                    } catch (DocumentConversionException e) {
+                        throw new DocumentConversionException("Failed to set field '" + field.getName() + "' in " + dtoClass.getSimpleName() + " at row " + (rowIdx + 1) + ": " + e.getMessage(), e);
                     }
                 }
                 resultList.add(dtoInstance);
 
             } catch (NoSuchMethodException e) {
-                throw new DocumentConversionException("No default constructor found for " + dtoClass.getName(), e);
+                throw new DocumentConversionException("No default constructor found for " + dtoClass.getName() + ". Please add a public no-argument constructor.", e);
             } catch (InstantiationException e) {
-                throw new DocumentConversionException("Cannot instantiate " + dtoClass.getName() + " (abstract class or interface)", e);
+                throw new DocumentConversionException("Cannot instantiate " + dtoClass.getName() + " (abstract class or interface). Please use a concrete class.", e);
             } catch (IllegalAccessException e) {
-                throw new DocumentConversionException("Cannot access constructor of " + dtoClass.getName(), e);
+                throw new DocumentConversionException("Cannot access constructor of " + dtoClass.getName() + ". Please make the constructor public.", e);
             } catch (InvocationTargetException e) {
-                throw new DocumentConversionException("Constructor threw exception for " + dtoClass.getName(), e.getCause());
+                throw new DocumentConversionException("Constructor threw exception for " + dtoClass.getName() + ": " + e.getCause().getMessage(), e.getCause());
             } catch (ExcelDomainException e) {
                 throw e;
             } catch (Exception e) {
-                throw new DocumentConversionException("Failed to create instance for row " + (rowIdx + 1), e);
+                throw new DocumentConversionException("Failed to create instance for row " + (rowIdx + 1) + " of type " + dtoClass.getName(), e);
             }
         }
         return resultList;
+    }
+
+    private static void validateWriteAnnotations(List<Field> annotatedFields, Class<?> dtoClass) {
+        Set<Integer> usedOrders = new HashSet<>();
+        Set<String> usedHeaders = new HashSet<>();
+
+        for (Field field : annotatedFields) {
+            ExcelWriteColumn annotation = field.getAnnotation(ExcelWriteColumn.class);
+
+            String headerName = annotation.headerName();
+            if (headerName == null || headerName.trim().isEmpty()) {
+                throw EntityMappingException.invalidAnnotationConfiguration(dtoClass, "Empty header name in field: " + field.getName());
+            }
+
+            if (!usedHeaders.add(headerName)) {
+                throw EntityMappingException.invalidAnnotationConfiguration(dtoClass, "Duplicate header name: " + headerName);
+            }
+
+            int order = annotation.order();
+            if (order >= 0 && order != Integer.MAX_VALUE && !usedOrders.add(order)) {
+                throw EntityMappingException.invalidAnnotationConfiguration(dtoClass, "Duplicate order value: " + order);
+            }
+        }
+    }
+
+    private<T> List<Integer> validateAndMapHeaders(List<Field> annotatedFields, List<String> excelHeaders, Class<T> dtoClass) {
+        List<Integer> fieldToColumnIndex = new ArrayList<>();
+
+        for (Field field : annotatedFields) {
+            ExcelReadColumn annotation = field.getAnnotation(ExcelReadColumn.class);
+            String headerName = annotation.headerName();
+
+            if (headerName == null || headerName.trim().isEmpty()) {
+                throw EntityMappingException.invalidAnnotationConfiguration(dtoClass, "Empty header name in field: " + field.getName());
+            }
+
+            int headerIndex = excelHeaders.indexOf(headerName);
+            if (headerIndex == -1) {
+                throw HeaderMismatchException.headerNotFound(headerName);
+            }
+            fieldToColumnIndex.add(headerIndex);
+        }
+
+        return fieldToColumnIndex;
     }
 }
