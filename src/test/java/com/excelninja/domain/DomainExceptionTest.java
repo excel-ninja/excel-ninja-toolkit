@@ -57,6 +57,7 @@ class DomainExceptionTest {
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("No @ExcelReadColumn");
     }
+
     @Test
     @DisplayName("중복 헤더명 어노테이션 시 EntityMappingException 발생")
     void duplicateHeaderAnnotation() {
@@ -64,7 +65,7 @@ class DomainExceptionTest {
                 new DuplicateHeaderDto("test1", "test2")
         );
 
-        assertThatThrownBy(() -> ExcelDocument.createWriter(data))
+        assertThatThrownBy(() -> ExcelDocument.createFromEntities(data))
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("Duplicate header name");
     }
@@ -76,7 +77,7 @@ class DomainExceptionTest {
                 new EmptyHeaderDto("test")
         );
 
-        assertThatThrownBy(() -> ExcelDocument.createWriter(data))
+        assertThatThrownBy(() -> ExcelDocument.createFromEntities(data))
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("Empty header name");
     }
@@ -86,7 +87,7 @@ class DomainExceptionTest {
     void emptyEntityList() {
         List<ValidWriteDto> emptyList = Arrays.asList();
 
-        assertThatThrownBy(() -> ExcelDocument.createWriter(emptyList))
+        assertThatThrownBy(() -> ExcelDocument.createFromEntities(emptyList))
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("cannot be null or empty");
     }
@@ -197,7 +198,7 @@ class DomainExceptionTest {
             headerRow.createCell(1).setCellValue("Age");
 
             Row dataRow = sheet.createRow(1);
-            dataRow.createCell(0).setCellValue("John");
+            dataRow.createCell(0).setCellValue("Hyunsoo");
             dataRow.createCell(1).setCellValue(30);
 
             try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {

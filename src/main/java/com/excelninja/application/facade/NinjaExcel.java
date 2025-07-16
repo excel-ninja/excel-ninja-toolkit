@@ -30,7 +30,7 @@ public final class NinjaExcel {
         validateReadInputs(file, clazz);
         try {
             ExcelDocument document = READER.read(file);
-            return document.toDTO(clazz, CONVERTER);
+            return document.convertToEntities(clazz, CONVERTER);
         } catch (IOException e) {
             throw new DocumentConversionException("Failed to read Excel file: " + file.getName() + ". Please check if the file exists and is not corrupted.", e);
         }
