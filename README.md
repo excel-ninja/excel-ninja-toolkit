@@ -91,7 +91,7 @@ List<UserReadDto> users = NinjaExcel.read(file, UserReadDto.class);
 ### 3. Write DTO List to Excel File
 
 ```java
-ExcelDocument document = ExcelDocument.createWriter(data);
+ExcelDocument document = ExcelDocument.createFromEntities(data);
 NinjaExcel.write(document, "/path/where/you/want/output.xlsx");
 ```
 
