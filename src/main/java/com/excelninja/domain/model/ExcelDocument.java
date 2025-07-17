@@ -91,45 +91,45 @@ public class ExcelDocument {
         return headers.size();
     }
 
-    public static Builder builder() {
-        return new Builder();
+    public static DocumentReadBuilder readBuilder() {
+        return new DocumentReadBuilder();
     }
 
-    public static final class Builder {
+    public static final class DocumentReadBuilder {
         private SheetName sheetName;
         private Headers headers;
         private DocumentRows rows;
         private final Map<Integer, Integer> columnWidths = new HashMap<>();
         private final Map<Integer, Short> rowHeights = new HashMap<>();
 
-        public Builder() {}
+        public DocumentReadBuilder() {}
 
-        public Builder sheet(String sheetName) {
+        public DocumentReadBuilder sheet(String sheetName) {
             this.sheetName = new SheetName(sheetName);
             return this;
         }
 
-        public Builder sheet(SheetName sheetName) {
+        public DocumentReadBuilder sheet(SheetName sheetName) {
             this.sheetName = Objects.requireNonNull(sheetName);
             return this;
         }
 
-        public Builder headers(List<String> headerNames) {
+        public DocumentReadBuilder headers(List<String> headerNames) {
             this.headers = Headers.of(headerNames);
             return this;
         }
 
-        public Builder headers(Headers headers) {
+        public DocumentReadBuilder headers(Headers headers) {
             this.headers = Objects.requireNonNull(headers);
             return this;
         }
 
-        public Builder headers(String... headerNames) {
+        public DocumentReadBuilder headers(String... headerNames) {
             this.headers = Headers.of(headerNames);
             return this;
         }
 
-        public Builder rows(List<List<Object>> rowValuesList) {
+        public DocumentReadBuilder rows(List<List<Object>> rowValuesList) {
             if (headers == null) {
                 throw new IllegalStateException("Headers must be set before rows");
             }
@@ -137,12 +137,12 @@ public class ExcelDocument {
             return this;
         }
 
-        public Builder rows(DocumentRows rows) {
+        public DocumentReadBuilder rows(DocumentRows rows) {
             this.rows = Objects.requireNonNull(rows);
             return this;
         }
 
-        public Builder columnWidth(
+        public DocumentReadBuilder columnWidth(
                 int columnIndex,
                 int width
         ) {
@@ -150,7 +150,7 @@ public class ExcelDocument {
             return this;
         }
 
-        public Builder rowHeight(
+        public DocumentReadBuilder rowHeight(
                 int rowIndex,
                 short height
         ) {
@@ -173,27 +173,54 @@ public class ExcelDocument {
         }
     }
 
-    public static <T> ExcelDocument createFromEntities(
-            List<T> entities,
-            String... sheetNames
-    ) {
-        if (entities == null || entities.isEmpty()) {
-            throw EntityMappingException.emptyEntityList();
+    public static WriteBuilder writeBuilder() {
+        return new WriteBuilder();
+    }
+
+    public static final class WriteBuilder {
+        public <T> DocumentWriteBuilder<T> objects(List<T> objects) {
+            return new DocumentWriteBuilder<>(objects);
+        }
+    }
+
+    public static final class DocumentWriteBuilder<T> {
+        private final List<T> objects;
+        private String sheetName;
+        private final Map<Integer, Integer> columnWidths = new HashMap<>();
+        private final Map<Integer, Short> rowHeights = new HashMap<>();
+
+        private DocumentWriteBuilder(List<T> objects) {
+            if (objects == null || objects.isEmpty()) {
+                throw EntityMappingException.emptyEntityList();
+            }
+            this.objects = objects;
         }
 
-        Class<?> entityType = entities.get(0).getClass();
+        public DocumentWriteBuilder<T> sheetName(String sheetName) {
+            this.sheetName = sheetName;
+            return this;
+        }
 
-        List<Field> annotatedFields = extractAndValidateWriteFields(entityType);
+        public DocumentWriteBuilder<T> columnWidth(int columnIndex, int width) {
+            this.columnWidths.put(columnIndex, width);
+            return this;
+        }
 
-        Headers headers = createHeadersFromFields(annotatedFields);
+        public DocumentWriteBuilder<T> rowHeight(int rowIndex, short height) {
+            this.rowHeights.put(rowIndex, height);
+            return this;
+        }
 
-        DocumentRows rows = createRowsFromEntities(entities, annotatedFields, headers.size());
+        public ExcelDocument build() {
+            Class<?> entityType = objects.get(0).getClass();
 
-        SheetName sheetName = sheetNames.length > 0 ?
-                new SheetName(sheetNames[0]) :
-                new SheetName(entityType.getSimpleName());
+            List<Field> annotatedFields = extractAndValidateWriteFields(entityType);
+            Headers headers = createHeadersFromFields(annotatedFields);
+            DocumentRows rows = createRowsFromEntities(objects, annotatedFields, headers.size());
 
-        return new ExcelDocument(sheetName, headers, rows, null, null);
+            SheetName sheet = sheetName != null ? new SheetName(sheetName) : new SheetName(entityType.getSimpleName());
+            return new ExcelDocument(sheet, headers, rows, columnWidths, rowHeights);
+        }
     }
 
     public <T> List<T> convertToEntities(
