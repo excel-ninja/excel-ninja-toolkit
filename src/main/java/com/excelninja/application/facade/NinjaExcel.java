@@ -38,10 +38,37 @@ public final class NinjaExcel {
             Class<T> clazz
     ) {
         validateReadInputs(file, clazz);
+
+        long startTime = System.currentTimeMillis();
+        String fileName = file.getName();
+        long fileSize = file.length();
+
+        logger.info(String.format(
+                "[NINJA-EXCEL] Reading Excel file: %s (%.2f KB)",
+                fileName,
+                fileSize / 1024.0
+        ));
+
         try {
             ExcelDocument document = READER.read(file);
-            return document.convertToEntities(clazz, CONVERTER);
+            List<T> result = document.convertToEntities(clazz, CONVERTER);
+
+            long duration = System.currentTimeMillis() - startTime;
+            double recordsPerSecond = calculateRecordsPerSecond(result.size(), duration);
+
+            logger.info(String.format(
+                    "[NINJA-EXCEL] Successfully read %d records from %s in %d ms (%.2f records/sec)",
+                    result.size(),
+                    fileName,
+                    duration,
+                    recordsPerSecond
+            ));
+
+            return result;
         } catch (IOException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            logger.severe(String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration));
+
             throw new DocumentConversionException("Failed to read Excel file: " + file.getName() + ". Please check if the file exists and is not corrupted.", e);
         }
     }
@@ -52,9 +79,28 @@ public final class NinjaExcel {
     ) {
         validateWriteInputs(document, out);
 
+        long startTime = System.currentTimeMillis();
+        int recordCount = document.getRowCount();
+
+        logger.info(String.format("[NINJA-EXCEL] Writing Excel document with %d records to output stream", recordCount));
+
         try {
             WRITER.write(document, out, CONVERTER);
+
+            long duration = System.currentTimeMillis() - startTime;
+            double recordsPerSecond = calculateRecordsPerSecond(recordCount, duration);
+
+            logger.info(String.format(
+                    "[NINJA-EXCEL] Successfully wrote %d records to output stream in %d ms (%.2f records/sec)",
+                    recordCount,
+                    duration,
+                    recordsPerSecond
+            ));
+
         } catch (Exception e) {
+            long duration = System.currentTimeMillis() - startTime;
+            logger.severe(String.format("[NINJA-EXCEL] Failed to write Excel document to output stream after %d ms", duration));
+
             throw new DocumentConversionException("Failed to write Excel document to output stream", e);
         }
     }
@@ -64,9 +110,33 @@ public final class NinjaExcel {
             String fileName
     ) {
         validateWriteInputs(document, fileName);
+
+        long startTime = System.currentTimeMillis();
+        int recordCount = document.getRowCount();
+
+        logger.info(String.format("[NINJA-EXCEL] Writing Excel document with %d records to file: %s", recordCount, fileName));
+
         try (FileOutputStream out = new FileOutputStream(fileName)) {
-            write(document, out);
+            WRITER.write(document, out, CONVERTER);
+
+            File writtenFile = new File(fileName);
+            long fileSize = writtenFile.length();
+            long duration = System.currentTimeMillis() - startTime;
+            double recordsPerSecond = calculateRecordsPerSecond(recordCount, duration);
+
+            logger.info(String.format(
+                    "[NINJA-EXCEL] Successfully wrote %d records to %s (%.2f KB) in %d ms (%.2f records/sec)",
+                    recordCount,
+                    fileName,
+                    fileSize / 1024.0,
+                    duration,
+                    recordsPerSecond
+            ));
+
         } catch (IOException e) {
+            long duration = System.currentTimeMillis() - startTime;
+            logger.severe(String.format("[NINJA-EXCEL] Failed to write Excel file: %s after %d ms", fileName, duration));
+
             throw new DocumentConversionException("Failed to write Excel file: " + fileName + ". Please check file permissions and available disk space.", e);
         }
     }
@@ -122,16 +192,14 @@ public final class NinjaExcel {
         }
     }
 
+    private static double calculateRecordsPerSecond(
+            int recordCount,
+            long duration
+    ) {
+        return duration > 0 ? (recordCount * 1000.0 / duration) : 0;
+    }
+
     static {
-        logger.info(
-                "\n" +
-                        "        ██████   / / \n" +
-                        "      ██████████/ /  \n" +
-                        "     █ ───  ─── █/   \n" +
-                        "      ██████████/    \n" +
-                        "        ██████ /     \n" +
-                        "─────██───────██─────\n" +
-                        "E X C E L - N I N J A"
-        );
+        logger.info("[NINJA-EXCEL] Ninja Excel activated!");
     }
 }
