@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
-import static org.apache.logging.log4j.util.Strings.repeat;
 import static org.assertj.core.api.Assertions.*;
 
 @DisplayName("값 객체 도입 효과 비교 테스트")
@@ -225,6 +224,23 @@ class ValueObjectComparisonTest {
 
         }).doesNotThrowAnyException();
     }
+
+    private static String repeat(
+            final String str,
+            final int count
+    ) {
+        Objects.requireNonNull(str, "str");
+        if (count < 0) {
+            throw new IllegalArgumentException("count");
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int index = 0; index < count; ++index) {
+            sb.append(str);
+        }
+        return sb.toString();
+    }
+
 
     @Test
     @DisplayName("도메인 지식의 응집도 개선")
