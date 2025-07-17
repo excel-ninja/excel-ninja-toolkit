@@ -62,7 +62,7 @@ public class PoiExcelReader implements ExcelReader {
                 rowIndex++;
             }
 
-            return ExcelDocument.builder()
+            return ExcelDocument.readBuilder()
                     .sheet(sheetName)
                     .headers(headerTitles)
                     .rows(dataRows)
