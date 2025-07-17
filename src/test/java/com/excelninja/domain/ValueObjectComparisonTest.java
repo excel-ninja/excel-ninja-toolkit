@@ -109,7 +109,7 @@ class ValueObjectComparisonTest {
                     Arrays.asList("Jane", 25, "jane@example.com")
             ), 3);
 
-            ExcelDocument document = ExcelDocument.builder()
+            ExcelDocument document = ExcelDocument.readBuilder()
                     .sheet(sheetName)
                     .headers(headers)
                     .rows(rows)

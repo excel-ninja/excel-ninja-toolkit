@@ -43,7 +43,15 @@ class DomainExceptionTest {
     @Test
     @DisplayName("null 파일 파라미터 시 DocumentConversionException 발생")
     void readNullFile() {
-        assertThatThrownBy(() -> NinjaExcel.read(null, ValidReadDto.class))
+        assertThatThrownBy(() -> NinjaExcel.read((File) null, ValidReadDto.class))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("cannot be null");
+    }
+
+    @Test
+    @DisplayName("null 스트링 파라미터 시 DocumentConversionException 발생")
+    void readNullString() {
+        assertThatThrownBy(() -> NinjaExcel.read((String) null, ValidReadDto.class))
                 .isInstanceOf(DocumentConversionException.class)
                 .hasMessageContaining("cannot be null");
     }
@@ -61,11 +69,9 @@ class DomainExceptionTest {
     @Test
     @DisplayName("중복 헤더명 어노테이션 시 EntityMappingException 발생")
     void duplicateHeaderAnnotation() {
-        List<DuplicateHeaderDto> data = Arrays.asList(
-                new DuplicateHeaderDto("test1", "test2")
-        );
+        List<DuplicateHeaderDto> data = Arrays.asList(new DuplicateHeaderDto("test1", "test2"));
 
-        assertThatThrownBy(() -> ExcelDocument.createFromEntities(data))
+        assertThatThrownBy(() -> ExcelDocument.writeBuilder().objects(data).build())
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("Duplicate header name");
     }
@@ -77,7 +83,7 @@ class DomainExceptionTest {
                 new EmptyHeaderDto("test")
         );
 
-        assertThatThrownBy(() -> ExcelDocument.createFromEntities(data))
+        assertThatThrownBy(() -> ExcelDocument.writeBuilder().objects(data).build())
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("Empty header name");
     }
@@ -87,7 +93,7 @@ class DomainExceptionTest {
     void emptyEntityList() {
         List<ValidWriteDto> emptyList = Arrays.asList();
 
-        assertThatThrownBy(() -> ExcelDocument.createFromEntities(emptyList))
+        assertThatThrownBy(() -> ExcelDocument.writeBuilder().objects(emptyList).build())
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("cannot be null or empty");
     }
@@ -96,7 +102,7 @@ class DomainExceptionTest {
     @DisplayName("ExcelDocument 빌더에서 빈 헤더 리스트 시 InvalidDocumentStructureException 발생")
     void emptyHeadersInBuilder() {
         assertThatThrownBy(() ->
-                ExcelDocument.builder()
+                ExcelDocument.readBuilder()
                         .sheet("TestSheet")
                         .headers(Arrays.asList())
                         .build()
@@ -109,7 +115,7 @@ class DomainExceptionTest {
     @DisplayName("ExcelDocument 빌더에서 행/열 불일치 시 InvalidDocumentStructureException 발생")
     void rowColumnMismatch() {
         assertThatThrownBy(() ->
-                ExcelDocument.builder()
+                ExcelDocument.readBuilder()
                         .sheet("TestSheet")
                         .headers(Arrays.asList("Header1", "Header2"))
                         .rows(Arrays.asList(
@@ -125,7 +131,7 @@ class DomainExceptionTest {
     @DisplayName("중복 헤더명으로 문서 생성 시 HeaderMismatchException 발생")
     void duplicateHeadersInDocument() {
         assertThatThrownBy(() ->
-                ExcelDocument.builder()
+                ExcelDocument.readBuilder()
                         .sheet("TestSheet")
                         .headers(Arrays.asList("Header1", "Header1"))
                         .build()
