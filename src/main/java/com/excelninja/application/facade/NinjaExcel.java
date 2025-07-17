@@ -24,6 +24,16 @@ public final class NinjaExcel {
     private NinjaExcel() {}
 
     public static <T> List<T> read(
+            String filePath,
+            Class<T> clazz
+    ) {
+        if (filePath == null || filePath.trim().isEmpty()) {
+            throw new DocumentConversionException("File path cannot be null or empty");
+        }
+        return read(new File(filePath), clazz);
+    }
+
+    public static <T> List<T> read(
             File file,
             Class<T> clazz
     ) {
