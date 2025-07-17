@@ -12,13 +12,14 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("NinjaExcelWriter Tests")
+@DisplayName("엑셀 작성기 테스트")
 class ExcelWriterTest {
 
     static class UserWriteDto {
@@ -46,7 +47,6 @@ class ExcelWriterTest {
             this.ignore = "This field should be ignored";
         }
     }
-
 
     public static class UserReadDto {
         @ExcelReadColumn(headerName = "ID")
@@ -85,9 +85,8 @@ class ExcelWriterTest {
         }
     }
 
-
     @Test
-    @DisplayName("Write Excel via NinjaExcel")
+    @DisplayName("임시파일로 엑셀 작성 및 읽기")
     void write_and_read_excel_via_NinjaExcel() throws Exception {
         List<UserWriteDto> usersToWrite = Arrays.asList(
                 new UserWriteDto(1L, "Alice123#!@#!@3", 30, 95.5),
@@ -120,19 +119,20 @@ class ExcelWriterTest {
             assertEquals(25.0, row2.getCell(2).getNumericCellValue());
         }
 
-        String fileName = "/Users/hyunsoojo/users_test.xlsx";
-        NinjaExcel.write(ExcelDocument.createFromEntities(usersToWrite), fileName);
-        java.nio.file.Path path = Paths.get(fileName);
-        assertTrue(Files.exists(path));
-        assertTrue(Files.size(path) > 0);
-
-        Files.delete(path);
+        Path tempFile = Files.createTempFile("users_test", ".xlsx");
+        try {
+            NinjaExcel.write(ExcelDocument.createFromEntities(usersToWrite), tempFile.toString());
+            assertTrue(Files.exists(tempFile));
+            assertTrue(Files.size(tempFile) > 0);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
     }
 
     @Test
-    @DisplayName("Read Excel via NinjaExcel")
+    @DisplayName("엑셀 파일 읽기")
     void read_excel_via_NinjaExcel() throws Exception {
-        File file = new File(getClass().getClassLoader().getResource("users_test.xlsx").toURI());
+        File file = new File(Objects.requireNonNull(getClass().getClassLoader().getResource("users_test.xlsx")).toURI());
         List<UserReadDto> users = NinjaExcel.read(file, UserReadDto.class);
 
         assertNotNull(users);
