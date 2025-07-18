@@ -78,10 +78,10 @@ List<User> users = Arrays.asList(
 );
 
 // Create document and write to file
-ExcelDocument document = ExcelDocument.writeBuilder()
+ExcelDocument document = ExcelDocument.writer()
     .objects(users)
     .sheetName("Users")
-    .build();
+    .create();
 
 NinjaExcel.write(document, "output.xlsx");
 
@@ -117,12 +117,12 @@ public class Employee {
 For more control over Excel generation:
 
 ```java
-ExcelDocument document = ExcelDocument.writeBuilder()
+ExcelDocument document = ExcelDocument.writer()
     .objects(employees)
     .sheetName("Employee Report")
     .columnWidth(0, 5000)  // Set column width
     .rowHeight(0, (short) 25)  // Set row height
-    .build();
+    .create();
 ```
 
 ### Advanced Reading with Document API
