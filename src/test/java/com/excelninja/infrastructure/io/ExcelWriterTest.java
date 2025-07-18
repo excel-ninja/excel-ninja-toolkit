@@ -94,7 +94,7 @@ class ExcelWriterTest {
         );
 
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        ExcelDocument document = ExcelDocument.writeBuilder().objects(usersToWrite).sheetName("mySheetName").build();
+        ExcelDocument document = ExcelDocument.writer().objects(usersToWrite).sheetName("mySheetName").create();
         NinjaExcel.write(document, byteArrayOutputStream);
         byte[] bytes = byteArrayOutputStream.toByteArray();
         assertTrue(bytes.length > 0);
@@ -121,7 +121,7 @@ class ExcelWriterTest {
 
         Path tempFile = Files.createTempFile("users_test", ".xlsx");
         try {
-            ExcelDocument excelDocument = ExcelDocument.writeBuilder().objects(usersToWrite).build();
+            ExcelDocument excelDocument = ExcelDocument.writer().objects(usersToWrite).create();
             NinjaExcel.write(excelDocument, tempFile.toString());
             assertTrue(Files.exists(tempFile));
             assertTrue(Files.size(tempFile) > 0);

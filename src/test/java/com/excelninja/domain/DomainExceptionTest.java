@@ -71,7 +71,7 @@ class DomainExceptionTest {
     void duplicateHeaderAnnotation() {
         List<DuplicateHeaderDto> data = Arrays.asList(new DuplicateHeaderDto("test1", "test2"));
 
-        assertThatThrownBy(() -> ExcelDocument.writeBuilder().objects(data).build())
+        assertThatThrownBy(() -> ExcelDocument.writer().objects(data).create())
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("Duplicate header name");
     }
@@ -83,7 +83,7 @@ class DomainExceptionTest {
                 new EmptyHeaderDto("test")
         );
 
-        assertThatThrownBy(() -> ExcelDocument.writeBuilder().objects(data).build())
+        assertThatThrownBy(() -> ExcelDocument.writer().objects(data).create())
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("Empty header name");
     }
@@ -93,7 +93,7 @@ class DomainExceptionTest {
     void emptyEntityList() {
         List<ValidWriteDto> emptyList = Arrays.asList();
 
-        assertThatThrownBy(() -> ExcelDocument.writeBuilder().objects(emptyList).build())
+        assertThatThrownBy(() -> ExcelDocument.writer().objects(emptyList).create())
                 .isInstanceOf(EntityMappingException.class)
                 .hasMessageContaining("cannot be null or empty");
     }
@@ -102,10 +102,10 @@ class DomainExceptionTest {
     @DisplayName("ExcelDocument 빌더에서 빈 헤더 리스트 시 InvalidDocumentStructureException 발생")
     void emptyHeadersInBuilder() {
         assertThatThrownBy(() ->
-                ExcelDocument.readBuilder()
+                ExcelDocument.reader()
                         .sheet("TestSheet")
                         .headers(Arrays.asList())
-                        .build()
+                        .create()
         )
                 .isInstanceOf(InvalidDocumentStructureException.class)
                 .hasMessageContaining("must have at least one header");
@@ -115,13 +115,13 @@ class DomainExceptionTest {
     @DisplayName("ExcelDocument 빌더에서 행/열 불일치 시 InvalidDocumentStructureException 발생")
     void rowColumnMismatch() {
         assertThatThrownBy(() ->
-                ExcelDocument.readBuilder()
+                ExcelDocument.reader()
                         .sheet("TestSheet")
                         .headers(Arrays.asList("Header1", "Header2"))
                         .rows(Arrays.asList(
                                 Arrays.asList("Value1")
                         ))
-                        .build()
+                        .create()
         )
                 .isInstanceOf(InvalidDocumentStructureException.class)
                 .hasMessageContaining("has 1 columns but expected 2");
@@ -131,10 +131,10 @@ class DomainExceptionTest {
     @DisplayName("중복 헤더명으로 문서 생성 시 HeaderMismatchException 발생")
     void duplicateHeadersInDocument() {
         assertThatThrownBy(() ->
-                ExcelDocument.readBuilder()
+                ExcelDocument.reader()
                         .sheet("TestSheet")
                         .headers(Arrays.asList("Header1", "Header1"))
-                        .build()
+                        .create()
         )
                 .isInstanceOf(HeaderMismatchException.class)
                 .hasMessageContaining("duplicate");
