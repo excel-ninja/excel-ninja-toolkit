@@ -36,8 +36,7 @@ public class ExcelDocument {
         this.rowHeights = Collections.unmodifiableMap(new HashMap<>(rowHeights != null ? rowHeights : new HashMap<>()));
 
         if (rows.getExpectedColumnCount() != headers.size()) {
-            throw InvalidDocumentStructureException.rowColumnMismatch(
-                    headers.size(), rows.getExpectedColumnCount(), 0);
+            throw InvalidDocumentStructureException.rowColumnMismatch(headers.size(), rows.getExpectedColumnCount(), 0);
         }
     }
 
@@ -153,45 +152,45 @@ public class ExcelDocument {
         return entities;
     }
 
-    public static DocumentReadBuilder readBuilder() {
-        return new DocumentReadBuilder();
+    public static DocumentReader reader() {
+        return new DocumentReader();
     }
 
-    public static final class DocumentReadBuilder {
+    public static final class DocumentReader {
         private SheetName sheetName;
         private Headers headers;
         private DocumentRows rows;
         private final Map<Integer, Integer> columnWidths = new HashMap<>();
         private final Map<Integer, Short> rowHeights = new HashMap<>();
 
-        public DocumentReadBuilder() {}
+        public DocumentReader() {}
 
-        public DocumentReadBuilder sheet(String sheetName) {
+        public DocumentReader sheet(String sheetName) {
             this.sheetName = new SheetName(sheetName);
             return this;
         }
 
-        public DocumentReadBuilder sheet(SheetName sheetName) {
+        public DocumentReader sheet(SheetName sheetName) {
             this.sheetName = Objects.requireNonNull(sheetName);
             return this;
         }
 
-        public DocumentReadBuilder headers(List<String> headerNames) {
+        public DocumentReader headers(List<String> headerNames) {
             this.headers = Headers.of(headerNames);
             return this;
         }
 
-        public DocumentReadBuilder headers(Headers headers) {
+        public DocumentReader headers(Headers headers) {
             this.headers = Objects.requireNonNull(headers);
             return this;
         }
 
-        public DocumentReadBuilder headers(String... headerNames) {
+        public DocumentReader headers(String... headerNames) {
             this.headers = Headers.of(headerNames);
             return this;
         }
 
-        public DocumentReadBuilder rows(List<List<Object>> rowValuesList) {
+        public DocumentReader rows(List<List<Object>> rowValuesList) {
             if (headers == null) {
                 throw new IllegalStateException("Headers must be set before rows");
             }
@@ -199,12 +198,12 @@ public class ExcelDocument {
             return this;
         }
 
-        public DocumentReadBuilder rows(DocumentRows rows) {
+        public DocumentReader rows(DocumentRows rows) {
             this.rows = Objects.requireNonNull(rows);
             return this;
         }
 
-        public DocumentReadBuilder columnWidth(
+        public DocumentReader columnWidth(
                 int columnIndex,
                 int width
         ) {
@@ -212,7 +211,7 @@ public class ExcelDocument {
             return this;
         }
 
-        public DocumentReadBuilder rowHeight(
+        public DocumentReader rowHeight(
                 int rowIndex,
                 short height
         ) {
@@ -220,7 +219,7 @@ public class ExcelDocument {
             return this;
         }
 
-        public ExcelDocument build() {
+        public ExcelDocument create() {
             if (sheetName == null) {
                 sheetName = SheetName.defaultName();
             }
@@ -235,45 +234,51 @@ public class ExcelDocument {
         }
     }
 
-    public static WriteBuilder writeBuilder() {
-        return new WriteBuilder();
+    public static Writer writer() {
+        return new Writer();
     }
 
-    public static final class WriteBuilder {
-        public <T> DocumentWriteBuilder<T> objects(List<T> objects) {
-            return new DocumentWriteBuilder<>(objects);
+    public static final class Writer {
+        public <T> DocumentWriter<T> objects(List<T> objects) {
+            return new DocumentWriter<>(objects);
         }
     }
 
-    public static final class DocumentWriteBuilder<T> {
+    public static final class DocumentWriter<T> {
         private final List<T> objects;
         private String sheetName;
         private final Map<Integer, Integer> columnWidths = new HashMap<>();
         private final Map<Integer, Short> rowHeights = new HashMap<>();
 
-        private DocumentWriteBuilder(List<T> objects) {
+        private DocumentWriter(List<T> objects) {
             if (objects == null || objects.isEmpty()) {
                 throw EntityMappingException.emptyEntityList();
             }
             this.objects = objects;
         }
 
-        public DocumentWriteBuilder<T> sheetName(String sheetName) {
+        public DocumentWriter<T> sheetName(String sheetName) {
             this.sheetName = sheetName;
             return this;
         }
 
-        public DocumentWriteBuilder<T> columnWidth(int columnIndex, int width) {
+        public DocumentWriter<T> columnWidth(
+                int columnIndex,
+                int width
+        ) {
             this.columnWidths.put(columnIndex, width);
             return this;
         }
 
-        public DocumentWriteBuilder<T> rowHeight(int rowIndex, short height) {
+        public DocumentWriter<T> rowHeight(
+                int rowIndex,
+                short height
+        ) {
             this.rowHeights.put(rowIndex, height);
             return this;
         }
 
-        public ExcelDocument build() {
+        public ExcelDocument create() {
             Class<?> entityType = objects.get(0).getClass();
 
             List<Field> writeFields = extractAndValidateWriteFieldsLegacy(entityType);
@@ -283,41 +288,6 @@ public class ExcelDocument {
             SheetName sheet = sheetName != null ? new SheetName(sheetName) : new SheetName(entityType.getSimpleName());
             return new ExcelDocument(sheet, headers, rows, columnWidths, rowHeights);
         }
-    }
-
-    /**
-     * 메타데이터를 사용한 최적화된 헤더 생성
-     */
-    private static Headers createHeadersFromMetadataOptimized(EntityMetadata<?> metadata) {
-        List<String> headerNames = metadata.getWriteHeaders();
-        return Headers.of(headerNames);
-    }
-
-    private static DocumentRows createRowsFromEntitiesOptimized(
-            List<?> entities,
-            EntityMetadata<?> metadata,
-            int expectedColumnCount
-    ) {
-        List<DocumentRow> documentRows = new ArrayList<>();
-        List<FieldMapping> fieldMappings = metadata.getWriteFieldMappings();
-
-        for (int entityIndex = 0; entityIndex < entities.size(); entityIndex++) {
-            Object entity = entities.get(entityIndex);
-            List<Object> rowValues = new ArrayList<>();
-
-            for (FieldMapping fieldMapping : fieldMappings) {
-                try {
-                    Object value = fieldMapping.getValue(entity);
-                    rowValues.add(value);
-                } catch (DocumentConversionException e) {
-                    throw new DocumentConversionException("Failed to read field '" + fieldMapping.getFieldName() + "' from entity at index " + entityIndex + ": " + e.getMessage(), e);
-                }
-            }
-
-            documentRows.add(new DocumentRow(rowValues, entityIndex + 1));
-        }
-
-        return new DocumentRows(documentRows, expectedColumnCount);
     }
 
     private static List<Field> extractAndValidateWriteFieldsLegacy(Class<?> entityType) {
@@ -395,20 +365,6 @@ public class ExcelDocument {
         }
 
         return new DocumentRows(documentRows, expectedColumnCount);
-    }
-
-    public static class PerformanceMonitor {
-        public static int getCachedMetadataCount() {
-            return EntityMetadata.getCacheSize();
-        }
-
-        public static void clearMetadataCache() {
-            EntityMetadata.clearCache();
-        }
-
-        public static void evictMetadata(Class<?> entityType) {
-            EntityMetadata.evictCache(entityType);
-        }
     }
 
     @Override

@@ -44,7 +44,7 @@ public final class NinjaExcel {
         String fileName = file.getName();
         long fileSize = file.length();
 
-        logger.info(String.format(
+        logger.fine(String.format(
                 "[NINJA-EXCEL] Reading Excel file: %s (%.2f KB) [Cache size: %d]",
                 fileName,
                 fileSize / 1024.0,
@@ -58,7 +58,7 @@ public final class NinjaExcel {
             long duration = System.currentTimeMillis() - startTime;
             double recordsPerSecond = calculateRecordsPerSecond(result.size(), duration);
 
-            logger.info(String.format(
+            logger.fine(String.format(
                     "[NINJA-EXCEL] Successfully read %d records from %s in %d ms (%.2f records/sec) [Cache size: %d]",
                     result.size(),
                     fileName,
@@ -85,7 +85,7 @@ public final class NinjaExcel {
         long startTime = System.currentTimeMillis();
         int recordCount = document.getRowCount();
 
-        logger.info(String.format(
+        logger.fine(String.format(
                 "[NINJA-EXCEL] Writing Excel document with %d records to output stream [Cache size: %d]",
                 recordCount,
                 EntityMetadata.getCacheSize()
@@ -97,7 +97,7 @@ public final class NinjaExcel {
             long duration = System.currentTimeMillis() - startTime;
             double recordsPerSecond = calculateRecordsPerSecond(recordCount, duration);
 
-            logger.info(String.format(
+            logger.fine(String.format(
                     "[NINJA-EXCEL] Successfully wrote %d records to output stream in %d ms (%.2f records/sec) [Cache size: %d]",
                     recordCount,
                     duration,
@@ -122,7 +122,7 @@ public final class NinjaExcel {
         long startTime = System.currentTimeMillis();
         int recordCount = document.getRowCount();
 
-        logger.info(String.format(
+        logger.fine(String.format(
                 "[NINJA-EXCEL] Writing Excel document with %d records to file: %s [Cache size: %d]",
                 recordCount,
                 fileName,
@@ -137,7 +137,7 @@ public final class NinjaExcel {
             long duration = System.currentTimeMillis() - startTime;
             double recordsPerSecond = calculateRecordsPerSecond(recordCount, duration);
 
-            logger.info(String.format(
+            logger.fine(String.format(
                     "[NINJA-EXCEL] Successfully wrote %d records to %s (%.2f KB) in %d ms (%.2f records/sec) [Cache size: %d]",
                     recordCount,
                     fileName,
@@ -153,30 +153,6 @@ public final class NinjaExcel {
 
             throw new DocumentConversionException("Failed to write Excel file: " + fileName + ". Please check file permissions and available disk space.", e);
         }
-    }
-
-    /**
-     * 메타데이터 캐시 관리 메서드들
-     */
-    public static void clearMetadataCache() {
-        EntityMetadata.clearCache();
-        logger.info("[NINJA-EXCEL] Metadata cache cleared");
-    }
-
-    public static int getMetadataCacheSize() {
-        return EntityMetadata.getCacheSize();
-    }
-
-    public static void preloadMetadata(Class<?>... entityTypes) {
-        for (Class<?> entityType : entityTypes) {
-            EntityMetadata.of(entityType);
-        }
-        logger.info(String.format("[NINJA-EXCEL] Preloaded metadata for %d entity types", entityTypes.length));
-    }
-
-    public static void evictMetadata(Class<?> entityType) {
-        EntityMetadata.evictCache(entityType);
-        logger.info(String.format("[NINJA-EXCEL] Evicted metadata for %s", entityType.getSimpleName()));
     }
 
     private static <T> void validateReadInputs(
@@ -238,6 +214,6 @@ public final class NinjaExcel {
     }
 
     static {
-        logger.info("[NINJA-EXCEL] Ninja Excel activated with metadata caching!");
+        logger.fine("[NINJA-EXCEL] Ninja Excel activated with metadata caching!");
     }
 }
