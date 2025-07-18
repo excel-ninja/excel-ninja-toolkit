@@ -108,11 +108,11 @@ class ValueObjectComparisonTest {
                     Arrays.asList("Jane", 25, "jane@example.com")
             ), 3);
 
-            ExcelDocument document = ExcelDocument.readBuilder()
+            ExcelDocument document = ExcelDocument.reader()
                     .sheet(sheetName)
                     .headers(headers)
                     .rows(rows)
-                    .build();
+                    .create();
 
             assertThat(document.getCellValue(0, "Name")).isEqualTo("Hyunsoo");
             assertThat(document.getCellValue(1, "Age", Integer.class)).isEqualTo(25);
@@ -229,11 +229,12 @@ class ValueObjectComparisonTest {
             final String str,
             final int count
     ) {
-        Objects.requireNonNull(str, "str");
+        if (str == null) {
+            throw new NullPointerException("str");
+        }
         if (count < 0) {
             throw new IllegalArgumentException("count");
         }
-
         StringBuilder sb = new StringBuilder();
         for (int index = 0; index < count; ++index) {
             sb.append(str);

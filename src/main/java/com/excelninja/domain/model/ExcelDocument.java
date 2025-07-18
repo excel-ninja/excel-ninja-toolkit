@@ -1,12 +1,13 @@
 package com.excelninja.domain.model;
 
 import com.excelninja.application.port.ConverterPort;
-import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
 import com.excelninja.domain.exception.DocumentConversionException;
 import com.excelninja.domain.exception.EntityMappingException;
 import com.excelninja.domain.exception.HeaderMismatchException;
 import com.excelninja.domain.exception.InvalidDocumentStructureException;
+import com.excelninja.infrastructure.metadata.EntityMetadata;
+import com.excelninja.infrastructure.metadata.FieldMapping;
 import com.excelninja.infrastructure.util.ReflectionUtils;
 
 import java.lang.reflect.Field;
@@ -35,8 +36,7 @@ public class ExcelDocument {
         this.rowHeights = Collections.unmodifiableMap(new HashMap<>(rowHeights != null ? rowHeights : new HashMap<>()));
 
         if (rows.getExpectedColumnCount() != headers.size()) {
-            throw InvalidDocumentStructureException.rowColumnMismatch(
-                    headers.size(), rows.getExpectedColumnCount(), 0);
+            throw InvalidDocumentStructureException.rowColumnMismatch(headers.size(), rows.getExpectedColumnCount(), 0);
         }
     }
 
@@ -91,45 +91,106 @@ public class ExcelDocument {
         return headers.size();
     }
 
-    public static DocumentReadBuilder readBuilder() {
-        return new DocumentReadBuilder();
+    public <T> List<T> convertToEntities(
+            Class<T> entityType,
+            ConverterPort converter
+    ) {
+        EntityMetadata<T> metadata = EntityMetadata.of(entityType);
+
+        List<Integer> fieldToColumnMapping = createFieldToColumnMappingOptimized(metadata);
+
+        return convertRowsToEntitiesOptimized(entityType, converter, metadata, fieldToColumnMapping);
     }
 
-    public static final class DocumentReadBuilder {
+    private List<Integer> createFieldToColumnMappingOptimized(EntityMetadata<?> metadata) {
+        List<Integer> mapping = new ArrayList<>();
+
+        for (FieldMapping fieldMapping : metadata.getReadFieldMappings()) {
+            String headerName = fieldMapping.getHeaderName();
+
+            if (!headers.containsHeader(headerName)) {
+                throw HeaderMismatchException.headerNotFound(headerName);
+            }
+
+            mapping.add(headers.getPositionOf(headerName));
+        }
+
+        return mapping;
+    }
+
+    private <T> List<T> convertRowsToEntitiesOptimized(
+            Class<T> entityType,
+            ConverterPort converter,
+            EntityMetadata<T> metadata,
+            List<Integer> fieldToColumnMapping
+    ) {
+        List<T> entities = new ArrayList<>();
+        List<FieldMapping> fieldMappings = metadata.getReadFieldMappings();
+
+        for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            DocumentRow row = rows.getRow(rowIndex);
+
+            try {
+                T entity = metadata.createInstance();
+
+                for (int fieldIndex = 0; fieldIndex < fieldMappings.size(); fieldIndex++) {
+                    FieldMapping fieldMapping = fieldMappings.get(fieldIndex);
+                    int columnIndex = fieldToColumnMapping.get(fieldIndex);
+
+                    Object cellValue = row.getValue(columnIndex);
+
+                    fieldMapping.setValue(entity, cellValue, converter);
+                }
+
+                entities.add(entity);
+
+            } catch (Exception e) {
+                throw new DocumentConversionException("Failed to create entity of type " + entityType.getName() + " for row " + (rowIndex + 1), e);
+            }
+        }
+
+        return entities;
+    }
+
+    public static DocumentReader reader() {
+        return new DocumentReader();
+    }
+
+    public static final class DocumentReader {
         private SheetName sheetName;
         private Headers headers;
         private DocumentRows rows;
         private final Map<Integer, Integer> columnWidths = new HashMap<>();
         private final Map<Integer, Short> rowHeights = new HashMap<>();
 
-        public DocumentReadBuilder() {}
+        public DocumentReader() {}
 
-        public DocumentReadBuilder sheet(String sheetName) {
+        public DocumentReader sheet(String sheetName) {
             this.sheetName = new SheetName(sheetName);
             return this;
         }
 
-        public DocumentReadBuilder sheet(SheetName sheetName) {
+        public DocumentReader sheet(SheetName sheetName) {
             this.sheetName = Objects.requireNonNull(sheetName);
             return this;
         }
 
-        public DocumentReadBuilder headers(List<String> headerNames) {
+        public DocumentReader headers(List<String> headerNames) {
             this.headers = Headers.of(headerNames);
             return this;
         }
 
-        public DocumentReadBuilder headers(Headers headers) {
+        public DocumentReader headers(Headers headers) {
             this.headers = Objects.requireNonNull(headers);
             return this;
         }
 
-        public DocumentReadBuilder headers(String... headerNames) {
+        public DocumentReader headers(String... headerNames) {
             this.headers = Headers.of(headerNames);
             return this;
         }
 
-        public DocumentReadBuilder rows(List<List<Object>> rowValuesList) {
+        public DocumentReader rows(List<List<Object>> rowValuesList) {
             if (headers == null) {
                 throw new IllegalStateException("Headers must be set before rows");
             }
@@ -137,12 +198,12 @@ public class ExcelDocument {
             return this;
         }
 
-        public DocumentReadBuilder rows(DocumentRows rows) {
+        public DocumentReader rows(DocumentRows rows) {
             this.rows = Objects.requireNonNull(rows);
             return this;
         }
 
-        public DocumentReadBuilder columnWidth(
+        public DocumentReader columnWidth(
                 int columnIndex,
                 int width
         ) {
@@ -150,7 +211,7 @@ public class ExcelDocument {
             return this;
         }
 
-        public DocumentReadBuilder rowHeight(
+        public DocumentReader rowHeight(
                 int rowIndex,
                 short height
         ) {
@@ -158,7 +219,7 @@ public class ExcelDocument {
             return this;
         }
 
-        public ExcelDocument build() {
+        public ExcelDocument create() {
             if (sheetName == null) {
                 sheetName = SheetName.defaultName();
             }
@@ -173,68 +234,63 @@ public class ExcelDocument {
         }
     }
 
-    public static WriteBuilder writeBuilder() {
-        return new WriteBuilder();
+    public static Writer writer() {
+        return new Writer();
     }
 
-    public static final class WriteBuilder {
-        public <T> DocumentWriteBuilder<T> objects(List<T> objects) {
-            return new DocumentWriteBuilder<>(objects);
+    public static final class Writer {
+        public <T> DocumentWriter<T> objects(List<T> objects) {
+            return new DocumentWriter<>(objects);
         }
     }
 
-    public static final class DocumentWriteBuilder<T> {
+    public static final class DocumentWriter<T> {
         private final List<T> objects;
         private String sheetName;
         private final Map<Integer, Integer> columnWidths = new HashMap<>();
         private final Map<Integer, Short> rowHeights = new HashMap<>();
 
-        private DocumentWriteBuilder(List<T> objects) {
+        private DocumentWriter(List<T> objects) {
             if (objects == null || objects.isEmpty()) {
                 throw EntityMappingException.emptyEntityList();
             }
             this.objects = objects;
         }
 
-        public DocumentWriteBuilder<T> sheetName(String sheetName) {
+        public DocumentWriter<T> sheetName(String sheetName) {
             this.sheetName = sheetName;
             return this;
         }
 
-        public DocumentWriteBuilder<T> columnWidth(int columnIndex, int width) {
+        public DocumentWriter<T> columnWidth(
+                int columnIndex,
+                int width
+        ) {
             this.columnWidths.put(columnIndex, width);
             return this;
         }
 
-        public DocumentWriteBuilder<T> rowHeight(int rowIndex, short height) {
+        public DocumentWriter<T> rowHeight(
+                int rowIndex,
+                short height
+        ) {
             this.rowHeights.put(rowIndex, height);
             return this;
         }
 
-        public ExcelDocument build() {
+        public ExcelDocument create() {
             Class<?> entityType = objects.get(0).getClass();
 
-            List<Field> annotatedFields = extractAndValidateWriteFields(entityType);
-            Headers headers = createHeadersFromFields(annotatedFields);
-            DocumentRows rows = createRowsFromEntities(objects, annotatedFields, headers.size());
+            List<Field> writeFields = extractAndValidateWriteFieldsLegacy(entityType);
+            Headers headers = createHeadersFromFieldsLegacy(writeFields);
+            DocumentRows rows = createRowsFromEntitiesLegacy(objects, writeFields, headers.size());
 
             SheetName sheet = sheetName != null ? new SheetName(sheetName) : new SheetName(entityType.getSimpleName());
             return new ExcelDocument(sheet, headers, rows, columnWidths, rowHeights);
         }
     }
 
-    public <T> List<T> convertToEntities(
-            Class<T> entityType,
-            ConverterPort converter
-    ) {
-        List<Field> annotatedFields = extractAndValidateReadFields(entityType);
-
-        List<Integer> fieldToColumnMapping = createFieldToColumnMapping(annotatedFields, headers);
-
-        return convertRowsToEntities(entityType, converter, annotatedFields, fieldToColumnMapping);
-    }
-
-    private static List<Field> extractAndValidateWriteFields(Class<?> entityType) {
+    private static List<Field> extractAndValidateWriteFieldsLegacy(Class<?> entityType) {
         List<Field> annotatedFields = Arrays.stream(entityType.getDeclaredFields())
                 .filter(field -> field.isAnnotationPresent(ExcelWriteColumn.class))
                 .collect(Collectors.toList());
@@ -243,26 +299,13 @@ public class ExcelDocument {
             throw EntityMappingException.noAnnotatedFields(entityType);
         }
 
-        validateWriteAnnotations(annotatedFields, entityType);
-
+        validateWriteAnnotationsLegacy(annotatedFields, entityType);
         annotatedFields.sort(Comparator.comparingInt(field -> field.getAnnotation(ExcelWriteColumn.class).order()));
 
         return annotatedFields;
     }
 
-    private static List<Field> extractAndValidateReadFields(Class<?> entityType) {
-        List<Field> annotatedFields = Arrays.stream(entityType.getDeclaredFields())
-                .filter(field -> field.isAnnotationPresent(ExcelReadColumn.class))
-                .collect(Collectors.toList());
-
-        if (annotatedFields.isEmpty()) {
-            throw EntityMappingException.noAnnotatedFields(entityType);
-        }
-
-        return annotatedFields;
-    }
-
-    private static void validateWriteAnnotations(
+    private static void validateWriteAnnotationsLegacy(
             List<Field> fields,
             Class<?> entityType
     ) {
@@ -288,7 +331,7 @@ public class ExcelDocument {
         }
     }
 
-    private static Headers createHeadersFromFields(List<Field> fields) {
+    private static Headers createHeadersFromFieldsLegacy(List<Field> fields) {
         List<Header> headerList = new ArrayList<>();
         for (int i = 0; i < fields.size(); i++) {
             Field field = fields.get(i);
@@ -298,7 +341,7 @@ public class ExcelDocument {
         return new Headers(headerList);
     }
 
-    private static DocumentRows createRowsFromEntities(
+    private static DocumentRows createRowsFromEntitiesLegacy(
             List<?> entities,
             List<Field> fields,
             int expectedColumnCount
@@ -322,90 +365,6 @@ public class ExcelDocument {
         }
 
         return new DocumentRows(documentRows, expectedColumnCount);
-    }
-
-    private List<Integer> createFieldToColumnMapping(
-            List<Field> fields,
-            Headers headers
-    ) {
-        List<Integer> mapping = new ArrayList<>();
-
-        for (Field field : fields) {
-            ExcelReadColumn annotation = field.getAnnotation(ExcelReadColumn.class);
-            String headerName = annotation.headerName();
-
-            if (headerName == null || headerName.trim().isEmpty()) {
-                throw EntityMappingException.invalidAnnotationConfiguration(field.getDeclaringClass(), "Empty header name in field: " + field.getName());
-            }
-
-            if (!headers.containsHeader(headerName)) {
-                throw HeaderMismatchException.headerNotFound(headerName);
-            }
-
-            mapping.add(headers.getPositionOf(headerName));
-        }
-
-        return mapping;
-    }
-
-    private <T> List<T> convertRowsToEntities(
-            Class<T> entityType,
-            ConverterPort converter,
-            List<Field> fields,
-            List<Integer> fieldToColumnMapping
-    ) {
-        List<T> entities = new ArrayList<>();
-
-        for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
-            DocumentRow row = rows.getRow(rowIndex);
-
-            try {
-                T entity = entityType.getDeclaredConstructor().newInstance();
-
-                for (int fieldIndex = 0; fieldIndex < fields.size(); fieldIndex++) {
-                    Field field = fields.get(fieldIndex);
-                    int columnIndex = fieldToColumnMapping.get(fieldIndex);
-
-                    Object cellValue = row.getValue(columnIndex);
-                    ExcelReadColumn annotation = field.getAnnotation(ExcelReadColumn.class);
-
-                    Object convertedValue = convertCellValue(cellValue, field, annotation, converter);
-
-                    try {
-                        ReflectionUtils.setFieldValue(entity, field, convertedValue);
-                    } catch (DocumentConversionException e) {
-                        throw new DocumentConversionException("Failed to set field '" + field.getName() + "' at row " + (rowIndex + 1) + ": " + e.getMessage(), e);
-                    }
-                }
-
-                entities.add(entity);
-
-            } catch (Exception e) {
-                throw new DocumentConversionException("Failed to create entity of type " + entityType.getName() + " for row " + (rowIndex + 1), e);
-            }
-        }
-
-        return entities;
-    }
-
-    private Object convertCellValue(
-            Object cellValue,
-            Field field,
-            ExcelReadColumn annotation,
-            ConverterPort converter
-    ) {
-        Class<?> targetType = annotation.type() == Void.class ? field.getType() : annotation.type();
-
-        try {
-            if (cellValue != null) {
-                return converter.convert(cellValue, targetType);
-            } else if (!annotation.defaultValue().isEmpty()) {
-                return converter.convert(annotation.defaultValue(), targetType);
-            }
-            return null;
-        } catch (Exception e) {
-            throw new DocumentConversionException(field.getName(), cellValue, "Type conversion failed: " + e.getMessage());
-        }
     }
 
     @Override

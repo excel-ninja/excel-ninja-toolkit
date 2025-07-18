@@ -29,11 +29,11 @@ class ValueObjectsIntegrationTest {
                 Arrays.asList("naruto", 35, "naruto@example.com", true)
         ), 4);
 
-        ExcelDocument document = ExcelDocument.readBuilder()
+        ExcelDocument document = ExcelDocument.reader()
                 .sheet(sheetName)
                 .headers(headers)
                 .rows(rows)
-                .build();
+                .create();
 
         List<UserDto> users = document.convertToEntities(UserDto.class, new DefaultConverter());
 
@@ -62,7 +62,7 @@ class ValueObjectsIntegrationTest {
                 new UserDto("Charlie", 32, "charlie@example.com", false)
         );
 
-        ExcelDocument document = ExcelDocument.writeBuilder().objects(users).sheetName("UserReport").build();
+        ExcelDocument document = ExcelDocument.writer().objects(users).sheetName("UserReport").create();
 
         assertThat(document.getSheetName().getValue()).isEqualTo("UserReport");
         assertThat(document.getSheetName().isDefault()).isFalse();
@@ -116,14 +116,14 @@ class ValueObjectsIntegrationTest {
     @Test
     @DisplayName("값 객체를 사용한 Excel 파일 읽기/쓰기 (NinjaExcel 통합)")
     void excelFileReadWriteWithValueObjects() {
-        ExcelDocument originalDocument = ExcelDocument.readBuilder()
+        ExcelDocument originalDocument = ExcelDocument.reader()
                 .sheet("Integration Test")
                 .headers("ID", "Name", "Score")
                 .rows(Arrays.asList(
                         Arrays.asList(1L, "Test User 1", 95.5),
                         Arrays.asList(2L, "Test User 2", 87.0)
                 ))
-                .build();
+                .create();
 
         List<TestScoreDto> scores = originalDocument.convertToEntities(TestScoreDto.class, new DefaultConverter());
 
@@ -134,7 +134,7 @@ class ValueObjectsIntegrationTest {
         assertThat(firstScore.getName()).isEqualTo("Test User 1");
         assertThat(firstScore.getScore()).isEqualTo(95.5);
 
-        ExcelDocument recreatedDocument = ExcelDocument.writeBuilder().objects(scores).sheetName("Recreated").build();
+        ExcelDocument recreatedDocument = ExcelDocument.writer().objects(scores).sheetName("Recreated").create();
 
         assertThat(recreatedDocument.getSheetName().getValue()).isEqualTo("Recreated");
         assertThat(recreatedDocument.getHeaders().size()).isEqualTo(3);
@@ -155,11 +155,11 @@ class ValueObjectsIntegrationTest {
                 Arrays.asList("X", "Y", "Z")
         ), 3);
 
-        ExcelDocument document = ExcelDocument.readBuilder()
+        ExcelDocument document = ExcelDocument.reader()
                 .sheet(sheetName)
                 .headers(headers)
                 .rows(rows)
-                .build();
+                .create();
 
         Headers retrievedHeaders = document.getHeaders();
         DocumentRows retrievedRows = document.getRows();
@@ -181,7 +181,7 @@ class ValueObjectsIntegrationTest {
     @Test
     @DisplayName("값 객체를 사용한 도메인 질의 메서드")
     void valueObjectDomainQueries() {
-        ExcelDocument document = ExcelDocument.readBuilder()
+        ExcelDocument document = ExcelDocument.reader()
                 .sheet("QueryTest")
                 .headers("Product", "Category", "Price", "InStock")
                 .rows(Arrays.asList(
@@ -190,7 +190,7 @@ class ValueObjectsIntegrationTest {
                         Arrays.asList("Phone", "Electronics", 599.99, true),
                         Arrays.asList("Chair", "Furniture", 149.99, true)
                 ))
-                .build();
+                .create();
 
         assertThat(document.hasData()).isTrue();
         assertThat(document.getRowCount()).isEqualTo(4);
