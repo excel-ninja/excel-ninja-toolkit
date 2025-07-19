@@ -9,6 +9,11 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
 
 import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.stream.IntStream;
 
 public class PoiExcelWriter implements ExcelWriter {
@@ -66,7 +71,7 @@ public class PoiExcelWriter implements ExcelWriter {
             for (int columnIndex = 0; columnIndex < documentRow.getColumnCount(); columnIndex++) {
                 XSSFCell cell = row.createCell(columnIndex);
                 Object rawValue = documentRow.getValue(columnIndex);
-                setCellValue(cell, rawValue, converter, dataStyle);
+                setCellValue(cell, rawValue, dataStyle);
             }
         }
     }
@@ -74,19 +79,30 @@ public class PoiExcelWriter implements ExcelWriter {
     private void setCellValue(
             XSSFCell cell,
             Object rawValue,
-            ConverterPort converter,
             XSSFCellStyle dataStyle
     ) {
-        Object convertedValue = converter.convert(rawValue, rawValue != null ? rawValue.getClass() : String.class);
-
-        if (convertedValue == null) {
+        if (rawValue == null) {
             cell.setCellValue("");
-        } else if (convertedValue instanceof Number) {
-            cell.setCellValue(((Number) convertedValue).doubleValue());
-        } else if (convertedValue instanceof Boolean) {
-            cell.setCellValue((Boolean) convertedValue);
+        } else if (rawValue instanceof Number) {
+            if (rawValue instanceof BigDecimal) {
+                cell.setCellValue(((BigDecimal) rawValue).doubleValue());
+            } else {
+                cell.setCellValue(((Number) rawValue).doubleValue());
+            }
+        } else if (rawValue instanceof Boolean) {
+            cell.setCellValue((Boolean) rawValue);
+        } else if (rawValue instanceof LocalDateTime) {
+            LocalDateTime localDateTime = (LocalDateTime) rawValue;
+            Date date = Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+            cell.setCellValue(date);
+        } else if (rawValue instanceof LocalDate) {
+            LocalDate localDate = (LocalDate) rawValue;
+            Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+            cell.setCellValue(date);
+        } else if (rawValue instanceof Date) {
+            cell.setCellValue((Date) rawValue);
         } else {
-            cell.setCellValue(convertedValue.toString());
+            cell.setCellValue(rawValue.toString());
         }
 
         cell.setCellStyle(dataStyle);

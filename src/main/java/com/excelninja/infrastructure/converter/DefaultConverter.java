@@ -19,6 +19,10 @@ public class DefaultConverter implements ConverterPort {
         }
 
         try {
+            if (targetType.isInstance(rawValue)) {
+                return rawValue;
+            }
+
             if (rawValue instanceof Number) {
                 return convertNumber((Number) rawValue, targetType);
             }
@@ -41,10 +45,6 @@ public class DefaultConverter implements ConverterPort {
 
             if (targetType == String.class) {
                 return rawValue.toString();
-            }
-
-            if (targetType.isInstance(rawValue)) {
-                return rawValue;
             }
 
             throw new DocumentConversionException(String.format("Cannot convert value '%s' of type %s to %s", rawValue, rawValue.getClass().getSimpleName(), targetType.getSimpleName()));
@@ -83,16 +83,38 @@ public class DefaultConverter implements ConverterPort {
         }
 
         if (targetType == BigDecimal.class) {
-            if (num instanceof BigDecimal) {
-                return num;
-            }
-            return BigDecimal.valueOf(num.doubleValue());
+            return convertNumberToBigDecimal(num);
         }
 
         return num;
     }
 
+    private BigDecimal convertNumberToBigDecimal(Number num) {
+        if (num instanceof BigDecimal) {
+            return (BigDecimal) num;
+        }
+
+        if (num instanceof Double) {
+            return new BigDecimal(num.toString());
+        }
+
+        if (num instanceof Float) {
+            return new BigDecimal(num.toString());
+        }
+
+        if (num instanceof Long || num instanceof Integer ||
+                num instanceof Short || num instanceof Byte) {
+            return BigDecimal.valueOf(num.longValue());
+        }
+
+        return BigDecimal.valueOf(num.doubleValue());
+    }
+
     private LocalDate convertToLocalDate(Object value) {
+        if (value instanceof LocalDate) {
+            return (LocalDate) value;
+        }
+
         if (value instanceof Date) {
             return ((Date) value).toInstant()
                     .atZone(java.time.ZoneId.systemDefault())
@@ -111,6 +133,10 @@ public class DefaultConverter implements ConverterPort {
     }
 
     private LocalDateTime convertToLocalDateTime(Object value) {
+        if (value instanceof LocalDateTime) {
+            return (LocalDateTime) value;
+        }
+
         if (value instanceof Date) {
             return ((Date) value).toInstant()
                     .atZone(java.time.ZoneId.systemDefault())
@@ -134,7 +160,7 @@ public class DefaultConverter implements ConverterPort {
         }
 
         if (value instanceof Number) {
-            return BigDecimal.valueOf(((Number) value).doubleValue());
+            return convertNumberToBigDecimal((Number) value);
         }
 
         if (value instanceof String) {
