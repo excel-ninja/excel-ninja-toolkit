@@ -25,7 +25,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.excel-ninja:excelNinja:0.0.7'
+    implementation 'io.github.excel-ninja:excelNinja:0.0.8'
 }
 ```
 
