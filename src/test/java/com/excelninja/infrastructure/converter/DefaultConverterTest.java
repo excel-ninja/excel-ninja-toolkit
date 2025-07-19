@@ -23,8 +23,8 @@ class DefaultConverterTest {
         assertThat(converter.convert("123.456", BigDecimal.class)).isEqualTo(new BigDecimal("123.456"));
         assertThat(converter.convert("999999999999999999.999999999", BigDecimal.class)).isEqualTo(new BigDecimal("999999999999999999.999999999"));
         assertThat(converter.convert(123.45, BigDecimal.class)).isEqualTo(BigDecimal.valueOf(123.45));
-        assertThat(converter.convert(100, BigDecimal.class)).isEqualTo(BigDecimal.valueOf(100.0));
-        assertThat(converter.convert(123L, BigDecimal.class)).isEqualTo(BigDecimal.valueOf(123.0));
+        assertThat(converter.convert(100, BigDecimal.class)).isEqualTo(BigDecimal.valueOf(100));
+        assertThat(converter.convert(123L, BigDecimal.class)).isEqualTo(BigDecimal.valueOf(123));
 
         BigDecimal originalBigDecimal = new BigDecimal("999.99");
         assertThat(converter.convert(originalBigDecimal, BigDecimal.class)).isSameAs(originalBigDecimal);
