@@ -28,12 +28,14 @@ public class PoiExcelWriter implements ExcelWriter {
 
             XSSFSheet sheet = workbook.createSheet(doc.getSheetName().getValue());
 
+            XSSFCellStyle dateStyle = createDateStyle(workbook);
+            XSSFCellStyle dateTimeStyle = createDateTimeStyle(workbook);
             XSSFCellStyle headerStyle = createHeaderStyle(workbook);
             XSSFCellStyle dataStyle = createDataStyle(workbook);
 
             createHeaderRow(sheet, doc, headerStyle);
 
-            createDataRows(sheet, doc, converter, dataStyle);
+            createDataRows(sheet, doc, converter, dataStyle, dateStyle, dateTimeStyle);
 
             adjustColumnWidths(sheet, doc);
             adjustRowHeights(sheet, doc);
@@ -63,7 +65,9 @@ public class PoiExcelWriter implements ExcelWriter {
             XSSFSheet sheet,
             ExcelDocument doc,
             ConverterPort converter,
-            XSSFCellStyle dataStyle
+            XSSFCellStyle dataStyle,
+            XSSFCellStyle dateStyle,
+            XSSFCellStyle dateTimeStyle
     ) {
         for (DocumentRow documentRow : doc.getRows().getRows()) {
             XSSFRow row = sheet.createRow(documentRow.getRowNumber());
@@ -71,7 +75,7 @@ public class PoiExcelWriter implements ExcelWriter {
             for (int columnIndex = 0; columnIndex < documentRow.getColumnCount(); columnIndex++) {
                 XSSFCell cell = row.createCell(columnIndex);
                 Object rawValue = documentRow.getValue(columnIndex);
-                setCellValue(cell, rawValue, dataStyle);
+                setCellValue(cell, rawValue, dataStyle, dateStyle, dateTimeStyle);
             }
         }
     }
@@ -79,33 +83,40 @@ public class PoiExcelWriter implements ExcelWriter {
     private void setCellValue(
             XSSFCell cell,
             Object rawValue,
-            XSSFCellStyle dataStyle
+            XSSFCellStyle dataStyle,
+            XSSFCellStyle dateStyle,
+            XSSFCellStyle dateTimeStyle
     ) {
         if (rawValue == null) {
             cell.setCellValue("");
+            cell.setCellStyle(dataStyle);
         } else if (rawValue instanceof Number) {
             if (rawValue instanceof BigDecimal) {
                 cell.setCellValue(((BigDecimal) rawValue).doubleValue());
             } else {
                 cell.setCellValue(((Number) rawValue).doubleValue());
             }
+            cell.setCellStyle(dataStyle);
         } else if (rawValue instanceof Boolean) {
             cell.setCellValue((Boolean) rawValue);
+            cell.setCellStyle(dataStyle);
         } else if (rawValue instanceof LocalDateTime) {
             LocalDateTime localDateTime = (LocalDateTime) rawValue;
             Date date = Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
             cell.setCellValue(date);
+            cell.setCellStyle(dateTimeStyle);
         } else if (rawValue instanceof LocalDate) {
             LocalDate localDate = (LocalDate) rawValue;
             Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
             cell.setCellValue(date);
+            cell.setCellStyle(dateStyle);
         } else if (rawValue instanceof Date) {
             cell.setCellValue((Date) rawValue);
+            cell.setCellStyle(dateTimeStyle);
         } else {
             cell.setCellValue(rawValue.toString());
+            cell.setCellStyle(dataStyle);
         }
-
-        cell.setCellStyle(dataStyle);
     }
 
     private void adjustColumnWidths(
@@ -166,5 +177,43 @@ public class PoiExcelWriter implements ExcelWriter {
         dataStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
         return dataStyle;
+    }
+
+    private XSSFCellStyle createDateStyle(XSSFWorkbook workbook) {
+        XSSFCellStyle dateStyle = workbook.createCellStyle();
+
+        dateStyle.setBorderTop(BorderStyle.THIN);
+        dateStyle.setBorderBottom(BorderStyle.THIN);
+        dateStyle.setBorderLeft(BorderStyle.THIN);
+        dateStyle.setBorderRight(BorderStyle.THIN);
+        dateStyle.setTopBorderColor(IndexedColors.BLACK.getIndex());
+        dateStyle.setBottomBorderColor(IndexedColors.BLACK.getIndex());
+        dateStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
+        dateStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
+        dateStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        XSSFDataFormat dataFormat = workbook.createDataFormat();
+        dateStyle.setDataFormat(dataFormat.getFormat("yyyy-mm-dd"));
+
+        return dateStyle;
+    }
+
+    private XSSFCellStyle createDateTimeStyle(XSSFWorkbook workbook) {
+        XSSFCellStyle dateTimeStyle = workbook.createCellStyle();
+
+        dateTimeStyle.setBorderTop(BorderStyle.THIN);
+        dateTimeStyle.setBorderBottom(BorderStyle.THIN);
+        dateTimeStyle.setBorderLeft(BorderStyle.THIN);
+        dateTimeStyle.setBorderRight(BorderStyle.THIN);
+        dateTimeStyle.setTopBorderColor(IndexedColors.BLACK.getIndex());
+        dateTimeStyle.setBottomBorderColor(IndexedColors.BLACK.getIndex());
+        dateTimeStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
+        dateTimeStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
+        dateTimeStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        XSSFDataFormat dataFormat = workbook.createDataFormat();
+        dateTimeStyle.setDataFormat(dataFormat.getFormat("yyyy-mm-dd hh:mm:ss"));
+
+        return dateTimeStyle;
     }
 }

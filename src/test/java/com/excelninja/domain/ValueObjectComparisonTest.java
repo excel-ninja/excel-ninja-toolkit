@@ -6,6 +6,9 @@ import com.excelninja.domain.model.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -36,6 +39,51 @@ class ValueObjectComparisonTest {
             validateHeaders(duplicateHeaders);
             validateRowConsistency(inconsistentRows, 3);
         });
+    }
+
+    @Test
+    @DisplayName("Before: BigDecimal과 LocalDate 처리의 복잡성")
+    void beforeValueObjects_ComplexTypeHandling() {
+        List<Object> financialRow = Arrays.asList(1001L, "150000.50", "2020-01-15");
+
+        Long accountId = (Long) financialRow.get(0);
+        String balanceStr = (String) financialRow.get(1);
+        String dateStr = (String) financialRow.get(2);
+
+        BigDecimal balance = new BigDecimal(balanceStr);
+        LocalDate openingDate = LocalDate.parse(dateStr);
+
+        assertThat(accountId).isEqualTo(1001L);
+        assertThat(balance).isEqualTo(new BigDecimal("150000.50"));
+        assertThat(openingDate).isEqualTo(LocalDate.of(2020, 1, 15));
+
+        assertThatThrownBy(() -> {
+            List<Object> invalidRow = Arrays.asList(1002L, "invalid_number", "invalid_date");
+            new BigDecimal((String) invalidRow.get(1));
+        }).isInstanceOf(NumberFormatException.class);
+    }
+
+    @Test
+    @DisplayName("Before: LocalDateTime 처리 시 발생하는 문제점")
+    void beforeValueObjects_LocalDateTimeComplexity() {
+        List<Object> eventRow = Arrays.asList(1L, "LOGIN", "2024-01-15T09:30:00", "user123");
+
+        Long eventId = (Long) eventRow.get(0);
+        String eventType = (String) eventRow.get(1);
+        String timestampStr = (String) eventRow.get(2);
+        String userId = (String) eventRow.get(3);
+
+        LocalDateTime timestamp = LocalDateTime.parse(timestampStr);
+
+        assertThat(eventId).isEqualTo(1L);
+        assertThat(eventType).isEqualTo("LOGIN");
+        assertThat(timestamp).isEqualTo(LocalDateTime.of(2024, 1, 15, 9, 30, 0));
+        assertThat(userId).isEqualTo("user123");
+
+        assertThatThrownBy(() -> {
+            List<Object> invalidRow = Arrays.asList(2L, "LOGOUT", "invalid_timestamp", "user456");
+            LocalDateTime.parse((String) invalidRow.get(2));
+        }).isInstanceOf(Exception.class);
     }
 
     private void validateSheetName(String sheetName) {
@@ -75,31 +123,12 @@ class ValueObjectComparisonTest {
     }
 
     @Test
-    @DisplayName("Before: 원시 타입 사용 시 발생 가능한 런타임 에러들")
-    void beforeValueObjects_RuntimeErrors() {
-
-        assertThatThrownBy(() -> validateSheetName(""))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Empty sheet name");
-
-        assertThatThrownBy(() -> validateHeaders(Arrays.asList("Name", "Name")))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Duplicate header");
-
-        assertThatThrownBy(() -> validateRowConsistency(Arrays.asList(
-                Arrays.asList("Hyunsoo", 30),
-                Collections.singletonList("Jane")
-        ), 2))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("has 1 columns, expected 2");
-    }
-
-    @Test
     @DisplayName("After: 값 객체 사용 - 타입 안전성과 도메인 규칙 보장")
     void afterValueObjects_TypeSafetyAndDomainRules() {
         assertThatThrownBy(() -> new SheetName("")).isInstanceOf(InvalidDocumentStructureException.class);
         assertThatThrownBy(() -> Headers.of("Name", "Name")).isInstanceOf(HeaderMismatchException.class);
         assertThatThrownBy(() -> DocumentRows.of(Arrays.asList(Arrays.asList("Hyunsoo", 30), Collections.singletonList("Jane")), 2)).isInstanceOf(InvalidDocumentStructureException.class);
+
         assertThatCode(() -> {
             SheetName sheetName = new SheetName("ValidSheet");
             Headers headers = Headers.of("Name", "Age", "Email");
@@ -116,6 +145,52 @@ class ValueObjectComparisonTest {
 
             assertThat(document.getCellValue(0, "Name")).isEqualTo("Hyunsoo");
             assertThat(document.getCellValue(1, "Age", Integer.class)).isEqualTo(25);
+
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("After: BigDecimal과 LocalDate를 포함한 안전한 처리")
+    void afterValueObjects_SafeBigDecimalAndLocalDateHandling() {
+        assertThatCode(() -> {
+            SheetName sheetName = new SheetName("FinancialData");
+            Headers headers = Headers.of("Account ID", "Balance", "Opening Date");
+            DocumentRows rows = DocumentRows.of(Arrays.asList(
+                    Arrays.asList(1001L, new BigDecimal("150000.50"), LocalDate.of(2020, 1, 15)),
+                    Arrays.asList(1002L, new BigDecimal("85000.75"), LocalDate.of(2021, 6, 10))
+            ), 3);
+
+            ExcelDocument document = ExcelDocument.reader()
+                    .sheet(sheetName)
+                    .headers(headers)
+                    .rows(rows)
+                    .create();
+
+            assertThat(document.getCellValue(0, "Balance", BigDecimal.class)).isEqualTo(new BigDecimal("150000.50"));
+            assertThat(document.getCellValue(1, "Opening Date", LocalDate.class)).isEqualTo(LocalDate.of(2021, 6, 10));
+
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("After: LocalDateTime을 포함한 안전한 처리")
+    void afterValueObjects_SafeLocalDateTimeHandling() {
+        assertThatCode(() -> {
+            SheetName sheetName = new SheetName("EventLog");
+            Headers headers = Headers.of("Event ID", "Event Type", "Timestamp", "User ID");
+            DocumentRows rows = DocumentRows.of(Arrays.asList(
+                    Arrays.asList(1L, "LOGIN", LocalDateTime.of(2024, 1, 15, 9, 30, 0), "user123"),
+                    Arrays.asList(2L, "LOGOUT", LocalDateTime.of(2024, 1, 15, 17, 45, 30), "user456")
+            ), 4);
+
+            ExcelDocument document = ExcelDocument.reader()
+                    .sheet(sheetName)
+                    .headers(headers)
+                    .rows(rows)
+                    .create();
+
+            assertThat(document.getCellValue(0, "Timestamp", LocalDateTime.class)).isEqualTo(LocalDateTime.of(2024, 1, 15, 9, 30, 0));
+            assertThat(document.getCellValue(1, "User ID")).isEqualTo("user456");
 
         }).doesNotThrowAnyException();
     }
@@ -162,6 +237,31 @@ class ValueObjectComparisonTest {
     }
 
     @Test
+    @DisplayName("BigDecimal과 LocalDateTime을 포함한 값 객체 표현력")
+    void advancedValueObjectExpressiveness() {
+        SheetName sheetName = new SheetName("FinancialProducts");
+        Headers headers = Headers.of("Product ID", "Name", "Price", "Launch Date", "Last Updated");
+        DocumentRow row = DocumentRow.of(Arrays.asList(
+                1L,
+                "Premium Account",
+                new BigDecimal("999.99"),
+                LocalDate.of(2024, 1, 1),
+                LocalDateTime.of(2024, 1, 15, 10, 30, 0)
+        ), 1);
+
+        assertThat(sheetName.getValue()).isEqualTo("FinancialProducts");
+        assertThat(headers.containsHeader("Price")).isTrue();
+        assertThat(headers.getPositionOf("Launch Date")).isEqualTo(3);
+
+        assertThat(row.getValueByHeader(headers, "Price", BigDecimal.class)).isEqualTo(new BigDecimal("999.99"));
+        assertThat(row.getValueByHeader(headers, "Launch Date", LocalDate.class)).isEqualTo(LocalDate.of(2024, 1, 1));
+        assertThat(row.getValueByHeader(headers, "Last Updated", LocalDateTime.class)).isEqualTo(LocalDateTime.of(2024, 1, 15, 10, 30, 0));
+
+        assertThat(row.getRowNumber()).isEqualTo(1);
+        assertThat(row.getColumnCount()).isEqualTo(5);
+    }
+
+    @Test
     @DisplayName("값 객체의 불변성 vs 가변성 비교")
     void immutabilityComparison() {
         List<String> mutableHeaders = Arrays.asList("Name", "Age");
@@ -200,6 +300,38 @@ class ValueObjectComparisonTest {
     }
 
     @Test
+    @DisplayName("복잡한 타입을 포함한 DocumentRow 동등성")
+    void complexTypeDocumentRowEquality() {
+        DocumentRow row1 = DocumentRow.of(Arrays.asList(
+                1L,
+                "Product A",
+                new BigDecimal("99.99"),
+                LocalDate.of(2024, 1, 1),
+                LocalDateTime.of(2024, 1, 15, 10, 30, 0)
+        ), 1);
+
+        DocumentRow row2 = DocumentRow.of(Arrays.asList(
+                1L,
+                "Product A",
+                new BigDecimal("99.99"),
+                LocalDate.of(2024, 1, 1),
+                LocalDateTime.of(2024, 1, 15, 10, 30, 0)
+        ), 1);
+
+        DocumentRow row3 = DocumentRow.of(Arrays.asList(
+                2L,
+                "Product B",
+                new BigDecimal("149.99"),
+                LocalDate.of(2024, 2, 1),
+                LocalDateTime.of(2024, 2, 10, 14, 45, 30)
+        ), 2);
+
+        assertThat(row1).isEqualTo(row2);
+        assertThat(row1.hashCode()).isEqualTo(row2.hashCode());
+        assertThat(row1).isNotEqualTo(row3);
+    }
+
+    @Test
     @DisplayName("값 객체의 자기 검증 (Self-Validation)")
     void selfValidation() {
         assertThatThrownBy(() -> new SheetName(null)).isInstanceOf(InvalidDocumentStructureException.class);
@@ -225,28 +357,9 @@ class ValueObjectComparisonTest {
         }).doesNotThrowAnyException();
     }
 
-    private static String repeat(
-            final String str,
-            final int count
-    ) {
-        if (str == null) {
-            throw new NullPointerException("str");
-        }
-        if (count < 0) {
-            throw new IllegalArgumentException("count");
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int index = 0; index < count; ++index) {
-            sb.append(str);
-        }
-        return sb.toString();
-    }
-
-
     @Test
     @DisplayName("도메인 지식의 응집도 개선")
     void domainKnowledgeCohesion() {
-
         SheetName sheetName = new SheetName("UserData");
         assertThat(sheetName.isDefault()).isFalse();
         assertThat(SheetName.defaultName().isDefault()).isTrue();
@@ -263,5 +376,50 @@ class ValueObjectComparisonTest {
 
         assertThat(row.getRowNumber()).isEqualTo(1);
         assertThat(row.getColumnCount()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("복잡한 타입을 포함한 도메인 지식 응집도")
+    void complexTypeDomainKnowledgeCohesion() {
+        SheetName sheetName = new SheetName("FinancialData");
+        Headers headers = Headers.of("Account ID", "Balance", "Rate", "Opening Date", "Last Updated");
+        DocumentRow row = DocumentRow.of(Arrays.asList(
+                1001L,
+                new BigDecimal("150000.50"),
+                new BigDecimal("3.25"),
+                LocalDate.of(2020, 1, 15),
+                LocalDateTime.of(2024, 1, 15, 10, 30, 0)
+        ), 1);
+
+        assertThat(sheetName.getValue()).isEqualTo("FinancialData");
+        assertThat(headers.containsHeader("Balance")).isTrue();
+        assertThat(headers.getPositionOf("Opening Date")).isEqualTo(3);
+
+        BigDecimal balance = row.getValueByHeader(headers, "Balance", BigDecimal.class);
+        LocalDate openingDate = row.getValueByHeader(headers, "Opening Date", LocalDate.class);
+        LocalDateTime lastUpdated = row.getValueByHeader(headers, "Last Updated", LocalDateTime.class);
+
+        assertThat(balance).isEqualTo(new BigDecimal("150000.50"));
+        assertThat(openingDate).isEqualTo(LocalDate.of(2020, 1, 15));
+        assertThat(lastUpdated).isEqualTo(LocalDateTime.of(2024, 1, 15, 10, 30, 0));
+
+        assertThat(row.isEmpty()).isFalse();
+        assertThat(row.hasValue(2)).isTrue();
+        assertThat(row.getRowNumber()).isEqualTo(1);
+        assertThat(row.getColumnCount()).isEqualTo(5);
+    }
+
+    private static String repeat(final String str, final int count) {
+        if (str == null) {
+            throw new NullPointerException("str");
+        }
+        if (count < 0) {
+            throw new IllegalArgumentException("count");
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int index = 0; index < count; ++index) {
+            sb.append(str);
+        }
+        return sb.toString();
     }
 }
