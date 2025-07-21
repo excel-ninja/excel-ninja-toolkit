@@ -1,60 +1,70 @@
 package com.excelninja.infrastructure.io;
 
-import com.excelninja.application.port.ConverterPort;
 import com.excelninja.domain.model.DocumentRow;
-import com.excelninja.domain.model.ExcelDocument;
+import com.excelninja.domain.model.ExcelSheet;
+import com.excelninja.domain.model.ExcelWorkbook;
 import com.excelninja.domain.model.Header;
-import com.excelninja.domain.port.ExcelWriter;
+import com.excelninja.domain.port.WorkbookWriter;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
-import java.util.stream.IntStream;
 
-public class PoiExcelWriter implements ExcelWriter {
+public class PoiWorkbookWriter implements WorkbookWriter {
 
     @Override
     public void write(
-            ExcelDocument doc,
-            OutputStream out,
-            ConverterPort converter
-    ) {
-        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            ExcelWorkbook workbook,
+            File file
+    ) throws IOException {
+        try (FileOutputStream fos = new FileOutputStream(file)) {
+            write(workbook, fos);
+        }
+    }
 
-            XSSFSheet sheet = workbook.createSheet(doc.getSheetName().getValue());
+    @Override
+    public void write(
+            ExcelWorkbook workbook,
+            OutputStream outputStream
+    ) throws IOException {
+        try (XSSFWorkbook poiWorkbook = new XSSFWorkbook()) {
 
-            XSSFCellStyle dateStyle = createDateStyle(workbook);
-            XSSFCellStyle dateTimeStyle = createDateTimeStyle(workbook);
-            XSSFCellStyle headerStyle = createHeaderStyle(workbook);
-            XSSFCellStyle dataStyle = createDataStyle(workbook);
+            XSSFCellStyle dateStyle = createDateStyle(poiWorkbook);
+            XSSFCellStyle dateTimeStyle = createDateTimeStyle(poiWorkbook);
+            XSSFCellStyle headerStyle = createHeaderStyle(poiWorkbook);
+            XSSFCellStyle dataStyle = createDataStyle(poiWorkbook);
 
-            createHeaderRow(sheet, doc, headerStyle);
+            for (String sheetName : workbook.getSheetNames()) {
+                ExcelSheet excelSheet = workbook.getSheet(sheetName);
+                XSSFSheet poiSheet = poiWorkbook.createSheet(sheetName);
 
-            createDataRows(sheet, doc, converter, dataStyle, dateStyle, dateTimeStyle);
+                createHeaderRow(poiSheet, excelSheet, headerStyle);
+                createDataRows(poiSheet, excelSheet, dataStyle, dateStyle, dateTimeStyle);
+                adjustColumnWidths(poiSheet, excelSheet);
+                adjustRowHeights(poiSheet, excelSheet);
+            }
 
-            adjustColumnWidths(sheet, doc);
-            adjustRowHeights(sheet, doc);
-
-            workbook.write(out);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to write Excel file", e);
+            poiWorkbook.write(outputStream);
         }
     }
 
     private void createHeaderRow(
             XSSFSheet sheet,
-            ExcelDocument doc,
+            ExcelSheet excelSheet,
             XSSFCellStyle headerStyle
     ) {
         XSSFRow headerRow = sheet.createRow(0);
         headerRow.setHeightInPoints(20);
 
-        for (Header header : doc.getHeaders().getHeaders()) {
+        for (Header header : excelSheet.getHeaders().getHeaders()) {
             XSSFCell cell = headerRow.createCell(header.getPosition(), CellType.STRING);
             cell.setCellValue(header.getName());
             cell.setCellStyle(headerStyle);
@@ -63,13 +73,12 @@ public class PoiExcelWriter implements ExcelWriter {
 
     private void createDataRows(
             XSSFSheet sheet,
-            ExcelDocument doc,
-            ConverterPort converter,
+            ExcelSheet excelSheet,
             XSSFCellStyle dataStyle,
             XSSFCellStyle dateStyle,
             XSSFCellStyle dateTimeStyle
     ) {
-        for (DocumentRow documentRow : doc.getRows().getRows()) {
+        for (DocumentRow documentRow : excelSheet.getRows().getRows()) {
             XSSFRow row = sheet.createRow(documentRow.getRowNumber());
 
             for (int columnIndex = 0; columnIndex < documentRow.getColumnCount(); columnIndex++) {
@@ -121,22 +130,22 @@ public class PoiExcelWriter implements ExcelWriter {
 
     private void adjustColumnWidths(
             XSSFSheet sheet,
-            ExcelDocument doc
+            ExcelSheet excelSheet
     ) {
-        IntStream.range(0, doc.getHeaders().size()).forEach(columnIndex -> {
-            if (doc.getColumnWidths().containsKey(columnIndex)) {
-                sheet.setColumnWidth(columnIndex, doc.getColumnWidths().get(columnIndex));
-            } else {
+        for (int columnIndex = 0; columnIndex < excelSheet.getHeaders().size(); columnIndex++) {
+            if (excelSheet.getMetadata().getColumnWidths().containsKey(columnIndex)) {
+                sheet.setColumnWidth(columnIndex, excelSheet.getMetadata().getColumnWidths().get(columnIndex));
+            } else if (excelSheet.getMetadata().isAutoSizeColumns()) {
                 sheet.autoSizeColumn(columnIndex);
             }
-        });
+        }
     }
 
     private void adjustRowHeights(
             XSSFSheet sheet,
-            ExcelDocument doc
+            ExcelSheet excelSheet
     ) {
-        doc.getRowHeights().forEach((rowNumber, height) -> {
+        excelSheet.getMetadata().getRowHeights().forEach((rowNumber, height) -> {
             XSSFRow row = sheet.getRow(rowNumber);
             if (row != null) {
                 row.setHeight(height);
@@ -146,7 +155,6 @@ public class PoiExcelWriter implements ExcelWriter {
 
     private XSSFCellStyle createHeaderStyle(XSSFWorkbook workbook) {
         XSSFCellStyle headerStyle = workbook.createCellStyle();
-
         headerStyle.setBorderTop(BorderStyle.THIN);
         headerStyle.setBorderBottom(BorderStyle.THIN);
         headerStyle.setBorderLeft(BorderStyle.THIN);
@@ -159,13 +167,11 @@ public class PoiExcelWriter implements ExcelWriter {
         headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         headerStyle.setAlignment(HorizontalAlignment.CENTER);
         headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-
         return headerStyle;
     }
 
     private XSSFCellStyle createDataStyle(XSSFWorkbook workbook) {
         XSSFCellStyle dataStyle = workbook.createCellStyle();
-
         dataStyle.setBorderTop(BorderStyle.THIN);
         dataStyle.setBorderBottom(BorderStyle.THIN);
         dataStyle.setBorderLeft(BorderStyle.THIN);
@@ -175,13 +181,11 @@ public class PoiExcelWriter implements ExcelWriter {
         dataStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
         dataStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
         dataStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-
         return dataStyle;
     }
 
     private XSSFCellStyle createDateStyle(XSSFWorkbook workbook) {
         XSSFCellStyle dateStyle = workbook.createCellStyle();
-
         dateStyle.setBorderTop(BorderStyle.THIN);
         dateStyle.setBorderBottom(BorderStyle.THIN);
         dateStyle.setBorderLeft(BorderStyle.THIN);
@@ -191,16 +195,13 @@ public class PoiExcelWriter implements ExcelWriter {
         dateStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
         dateStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
         dateStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-
         XSSFDataFormat dataFormat = workbook.createDataFormat();
         dateStyle.setDataFormat(dataFormat.getFormat("yyyy-mm-dd"));
-
         return dateStyle;
     }
 
     private XSSFCellStyle createDateTimeStyle(XSSFWorkbook workbook) {
         XSSFCellStyle dateTimeStyle = workbook.createCellStyle();
-
         dateTimeStyle.setBorderTop(BorderStyle.THIN);
         dateTimeStyle.setBorderBottom(BorderStyle.THIN);
         dateTimeStyle.setBorderLeft(BorderStyle.THIN);
@@ -210,10 +211,8 @@ public class PoiExcelWriter implements ExcelWriter {
         dateTimeStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
         dateTimeStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
         dateTimeStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-
         XSSFDataFormat dataFormat = workbook.createDataFormat();
         dateTimeStyle.setDataFormat(dataFormat.getFormat("yyyy-mm-dd hh:mm:ss"));
-
         return dateTimeStyle;
     }
 }
