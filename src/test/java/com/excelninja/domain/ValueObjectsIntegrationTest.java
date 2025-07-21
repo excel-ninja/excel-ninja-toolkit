@@ -1,144 +1,139 @@
 package com.excelninja.domain;
 
+import com.excelninja.application.facade.NinjaExcel;
 import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
 import com.excelninja.domain.exception.HeaderMismatchException;
 import com.excelninja.domain.exception.InvalidDocumentStructureException;
 import com.excelninja.domain.model.*;
-import com.excelninja.infrastructure.converter.DefaultConverter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@DisplayName("값 객체 통합 테스트")
+@DisplayName("값 객체 통합 테스트 - 새로운 API")
 class ValueObjectsIntegrationTest {
+
+    @TempDir
+    Path tempDir;
 
     @Test
     @DisplayName("값 객체를 사용한 완전한 Excel 처리 플로우")
-    void completeExcelProcessingWithValueObjects() {
-        SheetName sheetName = new SheetName("UserData");
-        Headers headers = Headers.of("Name", "Age", "Email", "Active");
-        DocumentRows rows = DocumentRows.of(Arrays.asList(
-                Arrays.asList("Hyunsoo", 30, "hyunsoo@example.com", true),
-                Arrays.asList("Eunmi", 25, "eunmi@example.com", false),
-                Arrays.asList("naruto", 35, "naruto@example.com", true)
-        ), 4);
+    void completeExcelProcessingWithValueObjects() throws IOException {
+        List<UserDto> users = Arrays.asList(
+                new UserDto("Hyunsoo", 30, "hyunsoo@example.com", true),
+                new UserDto("Eunmi", 25, "eunmi@example.com", false),
+                new UserDto("naruto", 35, "naruto@example.com", true)
+        );
 
-        ExcelDocument document = ExcelDocument.reader()
-                .sheet(sheetName)
-                .headers(headers)
-                .rows(rows)
-                .create();
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("UserData", users)
+                .build();
 
-        List<UserDto> users = document.convertToEntities(UserDto.class, new DefaultConverter());
+        Path testFile = tempDir.resolve("users.xlsx");
+        NinjaExcel.write(workbook, testFile.toFile());
 
-        assertThat(users).hasSize(3);
+        List<UserDto> readUsers = NinjaExcel.read(testFile.toFile(), UserDto.class);
 
-        UserDto firstUser = users.get(0);
+        assertThat(readUsers).hasSize(3);
+
+        UserDto firstUser = readUsers.get(0);
         assertThat(firstUser.getName()).isEqualTo("Hyunsoo");
         assertThat(firstUser.getAge()).isEqualTo(30);
         assertThat(firstUser.getEmail()).isEqualTo("hyunsoo@example.com");
         assertThat(firstUser.isActive()).isTrue();
 
-        assertThat(document.getSheetName()).isInstanceOf(SheetName.class);
-        assertThat(document.getHeaders()).isInstanceOf(Headers.class);
-        assertThat(document.getRows()).isInstanceOf(DocumentRows.class);
-
-        assertThat(document.getCellValue(0, "Name")).isEqualTo("Hyunsoo");
-        assertThat(document.getCellValue(1, "Age", Integer.class)).isEqualTo(25);
-        assertThat(document.getColumn("Email")).containsExactly("hyunsoo@example.com", "eunmi@example.com", "naruto@example.com");
+        UserDto secondUser = readUsers.get(1);
+        assertThat(secondUser.getName()).isEqualTo("Eunmi");
+        assertThat(secondUser.getAge()).isEqualTo(25);
+        assertThat(secondUser.isActive()).isFalse();
     }
 
     @Test
     @DisplayName("BigDecimal과 LocalDate를 사용한 금융 데이터 처리")
-    void financialDataProcessingWithBigDecimalAndLocalDate() {
-        SheetName sheetName = new SheetName("FinancialData");
-        Headers headers = Headers.of("Account ID", "Balance", "Interest Rate", "Opening Date");
-        DocumentRows rows = DocumentRows.of(Arrays.asList(
-                Arrays.asList(1001L, new BigDecimal("150000.50"), new BigDecimal("3.25"), LocalDate.of(2020, 1, 15)),
-                Arrays.asList(1002L, new BigDecimal("85000.75"), new BigDecimal("2.80"), LocalDate.of(2021, 6, 10)),
-                Arrays.asList(1003L, new BigDecimal("250000.00"), new BigDecimal("4.15"), LocalDate.of(2019, 11, 5))
-        ), 4);
+    void financialDataProcessingWithBigDecimalAndLocalDate() throws IOException {
+        List<AccountDto> accounts = Arrays.asList(
+                new AccountDto(1001L, new BigDecimal("150000.50"), new BigDecimal("3.25"), LocalDate.of(2020, 1, 15)),
+                new AccountDto(1002L, new BigDecimal("85000.75"), new BigDecimal("2.80"), LocalDate.of(2021, 6, 10)),
+                new AccountDto(1003L, new BigDecimal("250000.00"), new BigDecimal("4.15"), LocalDate.of(2019, 11, 5))
+        );
 
-        ExcelDocument document = ExcelDocument.reader()
-                .sheet(sheetName)
-                .headers(headers)
-                .rows(rows)
-                .create();
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("FinancialData", accounts)
+                .build();
 
-        List<AccountDto> accounts = document.convertToEntities(AccountDto.class, new DefaultConverter());
+        Path testFile = tempDir.resolve("financial.xlsx");
+        NinjaExcel.write(workbook, testFile.toFile());
 
-        assertThat(accounts).hasSize(3);
+        List<AccountDto> readAccounts = NinjaExcel.read(testFile.toFile(), AccountDto.class);
 
-        AccountDto firstAccount = accounts.get(0);
+        assertThat(readAccounts).hasSize(3);
+
+        AccountDto firstAccount = readAccounts.get(0);
         assertThat(firstAccount.getAccountId()).isEqualTo(1001L);
-        assertThat(firstAccount.getBalance()).isEqualTo(new BigDecimal("150000.50"));
+        assertThat(firstAccount.getBalance()).isEqualTo(new BigDecimal("150000.5"));
         assertThat(firstAccount.getInterestRate()).isEqualTo(new BigDecimal("3.25"));
         assertThat(firstAccount.getOpeningDate()).isEqualTo(LocalDate.of(2020, 1, 15));
-
-        assertThat(document.getCellValue(0, "Balance", BigDecimal.class)).isEqualTo(new BigDecimal("150000.50"));
-        assertThat(document.getCellValue(1, "Opening Date", LocalDate.class)).isEqualTo(LocalDate.of(2021, 6, 10));
     }
 
     @Test
     @DisplayName("LocalDateTime을 사용한 이벤트 로그 처리")
-    void eventLogProcessingWithLocalDateTime() {
-        SheetName sheetName = new SheetName("EventLog");
-        Headers headers = Headers.of("Event ID", "Event Type", "Timestamp", "User ID");
-        DocumentRows rows = DocumentRows.of(Arrays.asList(
-                Arrays.asList(1L, "LOGIN", LocalDateTime.of(2024, 1, 15, 9, 30, 0), "user123"),
-                Arrays.asList(2L, "LOGOUT", LocalDateTime.of(2024, 1, 15, 17, 45, 30), "user123"),
-                Arrays.asList(3L, "PURCHASE", LocalDateTime.of(2024, 1, 16, 14, 20, 15), "user456")
-        ), 4);
+    void eventLogProcessingWithLocalDateTime() throws IOException {
+        List<EventLogDto> events = Arrays.asList(
+                new EventLogDto(1L, "LOGIN", LocalDateTime.of(2024, 1, 15, 9, 30, 0), "user123"),
+                new EventLogDto(2L, "LOGOUT", LocalDateTime.of(2024, 1, 15, 17, 45, 30), "user123"),
+                new EventLogDto(3L, "PURCHASE", LocalDateTime.of(2024, 1, 16, 14, 20, 15), "user456")
+        );
 
-        ExcelDocument document = ExcelDocument.reader()
-                .sheet(sheetName)
-                .headers(headers)
-                .rows(rows)
-                .create();
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("EventLog", events)
+                .build();
 
-        List<EventLogDto> events = document.convertToEntities(EventLogDto.class, new DefaultConverter());
+        Path testFile = tempDir.resolve("events.xlsx");
+        NinjaExcel.write(workbook, testFile.toFile());
 
-        assertThat(events).hasSize(3);
+        List<EventLogDto> readEvents = NinjaExcel.read(testFile.toFile(), EventLogDto.class);
 
-        EventLogDto firstEvent = events.get(0);
+        assertThat(readEvents).hasSize(3);
+
+        EventLogDto firstEvent = readEvents.get(0);
         assertThat(firstEvent.getEventId()).isEqualTo(1L);
         assertThat(firstEvent.getEventType()).isEqualTo("LOGIN");
         assertThat(firstEvent.getTimestamp()).isEqualTo(LocalDateTime.of(2024, 1, 15, 9, 30, 0));
         assertThat(firstEvent.getUserId()).isEqualTo("user123");
-
-        assertThat(document.getCellValue(1, "Timestamp", LocalDateTime.class)).isEqualTo(LocalDateTime.of(2024, 1, 15, 17, 45, 30));
     }
 
     @Test
     @DisplayName("모든 지원 타입을 포함한 복합 데이터 처리")
-    void comprehensiveDataProcessingWithAllSupportedTypes() {
-        SheetName sheetName = new SheetName("ComprehensiveData");
-        Headers headers = Headers.of("ID", "Name", "Price", "Created Date", "Last Modified", "Is Active");
-        DocumentRows rows = DocumentRows.of(Arrays.asList(
-                Arrays.asList(1L, "Product A", new BigDecimal("99.99"), LocalDate.of(2024, 1, 1), LocalDateTime.of(2024, 1, 15, 10, 30, 0), true),
-                Arrays.asList(2L, "Product B", new BigDecimal("149.50"), LocalDate.of(2024, 2, 1), LocalDateTime.of(2024, 2, 10, 14, 45, 30), false)
-        ), 6);
+    void comprehensiveDataProcessingWithAllSupportedTypes() throws IOException {
+        List<ComprehensiveDto> products = Arrays.asList(
+                new ComprehensiveDto(1L, "Product A", new BigDecimal("99.99"), LocalDate.of(2024, 1, 1), LocalDateTime.of(2024, 1, 15, 10, 30, 0), true),
+                new ComprehensiveDto(2L, "Product B", new BigDecimal("149.50"), LocalDate.of(2024, 2, 1), LocalDateTime.of(2024, 2, 10, 14, 45, 30), false)
+        );
 
-        ExcelDocument document = ExcelDocument.reader()
-                .sheet(sheetName)
-                .headers(headers)
-                .rows(rows)
-                .create();
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("ComprehensiveData", products)
+                .build();
 
-        List<ComprehensiveDto> products = document.convertToEntities(ComprehensiveDto.class, new DefaultConverter());
+        Path testFile = tempDir.resolve("comprehensive.xlsx");
+        NinjaExcel.write(workbook, testFile.toFile());
 
-        assertThat(products).hasSize(2);
+        List<ComprehensiveDto> readProducts = NinjaExcel.read(testFile.toFile(), ComprehensiveDto.class);
 
-        ComprehensiveDto firstProduct = products.get(0);
+        assertThat(readProducts).hasSize(2);
+
+        ComprehensiveDto firstProduct = readProducts.get(0);
         assertThat(firstProduct.getId()).isEqualTo(1L);
         assertThat(firstProduct.getName()).isEqualTo("Product A");
         assertThat(firstProduct.getPrice()).isEqualTo(new BigDecimal("99.99"));
@@ -148,56 +143,91 @@ class ValueObjectsIntegrationTest {
     }
 
     @Test
-    @DisplayName("값 객체를 사용한 엔티티에서 Excel 문서 생성")
-    void createExcelDocumentFromEntitiesWithValueObjects() {
+    @DisplayName("다중 시트 처리")
+    void multiSheetProcessing() throws IOException {
         List<UserDto> users = Arrays.asList(
                 new UserDto("Alice", 28, "alice@example.com", true),
                 new UserDto("Charlie", 32, "charlie@example.com", false)
         );
 
-        ExcelDocument document = ExcelDocument.writer().objects(users).sheetName("UserReport").create();
+        List<AccountDto> accounts = Arrays.asList(
+                new AccountDto(1001L, new BigDecimal("50000"), new BigDecimal("2.5"), LocalDate.of(2023, 1, 1))
+        );
 
-        assertThat(document.getSheetName().getValue()).isEqualTo("UserReport");
-        assertThat(document.getSheetName().isDefault()).isFalse();
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("Users", users)
+                .sheet("Accounts", accounts)
+                .metadata(new WorkbookMetadata("Test Author", "Multi-Sheet Test", LocalDateTime.now()))
+                .build();
 
-        Headers headers = document.getHeaders();
-        assertThat(headers.size()).isEqualTo(4);
-        assertThat(headers.containsHeader("Name")).isTrue();
-        assertThat(headers.containsHeader("Age")).isTrue();
-        assertThat(headers.containsHeader("Email")).isTrue();
-        assertThat(headers.containsHeader("Active")).isTrue();
+        Path testFile = tempDir.resolve("multi-sheet.xlsx");
+        NinjaExcel.write(workbook, testFile.toFile());
 
-        DocumentRows rows = document.getRows();
-        assertThat(rows.size()).isEqualTo(2);
-        assertThat(rows.getExpectedColumnCount()).isEqualTo(4);
+        List<UserDto> readUsers = NinjaExcel.readSheet(testFile.toFile(), "Users", UserDto.class);
+        List<AccountDto> readAccounts = NinjaExcel.readSheet(testFile.toFile(), "Accounts", AccountDto.class);
 
-        DocumentRow firstRow = rows.getRow(0);
-        assertThat(firstRow.getValueByHeader(headers, "Name")).isEqualTo("Alice");
-        assertThat(firstRow.getValueByHeader(headers, "Age", Integer.class)).isEqualTo(28);
-        assertThat(firstRow.getValueByHeader(headers, "Email")).isEqualTo("alice@example.com");
-        assertThat(firstRow.getValueByHeader(headers, "Active", Boolean.class)).isTrue();
+        assertThat(readUsers).hasSize(2);
+        assertThat(readAccounts).hasSize(1);
+
+        assertThat(readUsers.get(0).getName()).isEqualTo("Alice");
+        assertThat(readAccounts.get(0).getAccountId()).isEqualTo(1001L);
+
+        List<String> sheetNames = NinjaExcel.getSheetNames(testFile.toFile());
+        assertThat(sheetNames).containsExactly("Users", "Accounts");
     }
 
     @Test
-    @DisplayName("BigDecimal과 LocalDateTime을 포함한 엔티티 생성 테스트")
-    void createEntityWithBigDecimalAndLocalDateTime() {
-        List<ComprehensiveDto> products = Arrays.asList(
-                new ComprehensiveDto(1L, "Premium Product", new BigDecimal("999.99"),
-                        LocalDate.of(2024, 1, 1), LocalDateTime.of(2024, 1, 15, 10, 30, 0), true),
-                new ComprehensiveDto(2L, "Standard Product", new BigDecimal("49.99"),
-                        LocalDate.of(2024, 2, 1), LocalDateTime.of(2024, 2, 10, 14, 45, 30), false)
-        );
+    @DisplayName("커스텀 시트 빌더를 사용한 데이터 처리")
+    void customSheetBuilderProcessing() throws IOException {
+        ExcelSheet customSheet = ExcelSheet.builder()
+                .name("CustomData")
+                .headers("ID", "Name", "Price", "Date")
+                .rows(Arrays.asList(
+                        Arrays.asList(1L, "Item1", new BigDecimal("99.99"), LocalDate.of(2024, 1, 15)),
+                        Arrays.asList(2L, "Item2", new BigDecimal("149.50"), LocalDate.of(2024, 2, 20))
+                ))
+                .columnWidth(0, 3000)
+                .columnWidth(1, 5000)
+                .build();
 
-        ExcelDocument document = ExcelDocument.writer().objects(products).sheetName("ProductCatalog").create();
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("Custom", customSheet)
+                .build();
 
-        assertThat(document.getSheetName().getValue()).isEqualTo("ProductCatalog");
-        assertThat(document.getHeaders().size()).isEqualTo(6);
-        assertThat(document.getRows().size()).isEqualTo(2);
+        Path testFile = tempDir.resolve("custom.xlsx");
+        NinjaExcel.write(workbook, testFile.toFile());
 
-        DocumentRow firstRow = document.getRows().getRow(0);
-        assertThat(firstRow.getValueByHeader(document.getHeaders(), "Price")).isEqualTo(new BigDecimal("999.99"));
-        assertThat(firstRow.getValueByHeader(document.getHeaders(), "Created Date")).isEqualTo(LocalDate.of(2024, 1, 1));
-        assertThat(firstRow.getValueByHeader(document.getHeaders(), "Last Modified")).isEqualTo(LocalDateTime.of(2024, 1, 15, 10, 30, 0));
+        assertThat(testFile.toFile()).exists();
+        assertThat(testFile.toFile().length()).isGreaterThan(0);
+    }
+
+    @Test
+    @DisplayName("ExcelSheet 빌더에서 행/열 불일치 시 InvalidDocumentStructureException 발생")
+    void rowColumnMismatch() {
+        assertThatThrownBy(() ->
+                ExcelSheet.builder()
+                        .name("TestSheet")
+                        .headers("Header1", "Header2")
+                        .rows(Arrays.asList(
+                                Arrays.asList("Value1")
+                        ))
+                        .build()
+        )
+                .isInstanceOf(InvalidDocumentStructureException.class)
+                .hasMessageContaining("has 1 columns but expected 2");
+    }
+
+    @Test
+    @DisplayName("중복 헤더명으로 시트 생성 시 HeaderMismatchException 발생")
+    void duplicateHeadersInSheet() {
+        assertThatThrownBy(() ->
+                ExcelSheet.builder()
+                        .name("TestSheet")
+                        .headers("Header1", "Header1")
+                        .build()
+        )
+                .isInstanceOf(HeaderMismatchException.class)
+                .hasMessageContaining("duplicate");
     }
 
     @Test
@@ -238,14 +268,17 @@ class ValueObjectsIntegrationTest {
                 Arrays.asList("X", "Y", "Z")
         ), 3);
 
-        ExcelDocument document = ExcelDocument.reader()
-                .sheet(sheetName)
-                .headers(headers)
-                .rows(rows)
-                .create();
+        ExcelSheet sheet = ExcelSheet.builder()
+                .name(sheetName.getValue())
+                .headers(headers.getHeaderNames())
+                .rows(Arrays.asList(
+                        Arrays.asList("A", "B", "C"),
+                        Arrays.asList("X", "Y", "Z")
+                ))
+                .build();
 
-        Headers retrievedHeaders = document.getHeaders();
-        DocumentRows retrievedRows = document.getRows();
+        Headers retrievedHeaders = sheet.getHeaders();
+        DocumentRows retrievedRows = sheet.getRows();
 
         assertThatThrownBy(() -> retrievedHeaders.getHeaders().add(new Header("NewHeader", 3)))
                 .isInstanceOf(UnsupportedOperationException.class);
@@ -253,12 +286,40 @@ class ValueObjectsIntegrationTest {
         assertThatThrownBy(() -> retrievedRows.getRows().add(DocumentRow.of(Arrays.asList("New", "Row", "Data"), 3)))
                 .isInstanceOf(UnsupportedOperationException.class);
 
-        SheetName originalSheetName = document.getSheetName();
+        SheetName originalSheetName = sheet.getName();
         assertThat(originalSheetName.getValue()).isEqualTo("ImmutableTest");
 
         SheetName newSheetName = new SheetName("NewSheet");
         assertThat(originalSheetName.getValue()).isEqualTo("ImmutableTest");
         assertThat(newSheetName.getValue()).isEqualTo("NewSheet");
+    }
+
+    @Test
+    @DisplayName("전체 시트 읽기 테스트 - 같은 타입")
+    void readAllSheetsTest() throws IOException {
+        List<UserDto> engineeringUsers = Arrays.asList(
+                new UserDto("Alice", 28, "alice@example.com", true)
+        );
+
+        List<UserDto> marketingUsers = Arrays.asList(
+                new UserDto("Bob", 32, "bob@example.com", false)
+        );
+
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("Engineering", engineeringUsers)
+                .sheet("Marketing", marketingUsers)
+                .build();
+
+        Path testFile = tempDir.resolve("all-user-sheets.xlsx");
+        NinjaExcel.write(workbook, testFile.toFile());
+
+        Map<String, List<UserDto>> allUserSheets = NinjaExcel.readAllSheets(testFile.toFile(), UserDto.class);
+
+        assertThat(allUserSheets).hasSize(2);
+        assertThat(allUserSheets.get("Engineering")).hasSize(1);
+        assertThat(allUserSheets.get("Marketing")).hasSize(1);
+        assertThat(allUserSheets.get("Engineering").get(0).getName()).isEqualTo("Alice");
+        assertThat(allUserSheets.get("Marketing").get(0).getName()).isEqualTo("Bob");
     }
 
     public static class UserDto {
@@ -396,7 +457,14 @@ class ValueObjectsIntegrationTest {
 
         public ComprehensiveDto() {}
 
-        public ComprehensiveDto(Long id, String name, BigDecimal price, LocalDate createdDate, LocalDateTime lastModified, Boolean isActive) {
+        public ComprehensiveDto(
+                Long id,
+                String name,
+                BigDecimal price,
+                LocalDate createdDate,
+                LocalDateTime lastModified,
+                Boolean isActive
+        ) {
             this.id = id;
             this.name = name;
             this.price = price;

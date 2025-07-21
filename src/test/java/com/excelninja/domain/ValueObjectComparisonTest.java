@@ -130,21 +130,17 @@ class ValueObjectComparisonTest {
         assertThatThrownBy(() -> DocumentRows.of(Arrays.asList(Arrays.asList("Hyunsoo", 30), Collections.singletonList("Jane")), 2)).isInstanceOf(InvalidDocumentStructureException.class);
 
         assertThatCode(() -> {
-            SheetName sheetName = new SheetName("ValidSheet");
-            Headers headers = Headers.of("Name", "Age", "Email");
-            DocumentRows rows = DocumentRows.of(Arrays.asList(
-                    Arrays.asList("Hyunsoo", 30, "hyunsoo@example.com"),
-                    Arrays.asList("Jane", 25, "jane@example.com")
-            ), 3);
+            ExcelSheet sheet = ExcelSheet.builder()
+                    .name("ValidSheet")
+                    .headers("Name", "Age", "Email")
+                    .rows(Arrays.asList(
+                            Arrays.asList("Hyunsoo", 30, "hyunsoo@example.com"),
+                            Arrays.asList("Jane", 25, "jane@example.com")
+                    ))
+                    .build();
 
-            ExcelDocument document = ExcelDocument.reader()
-                    .sheet(sheetName)
-                    .headers(headers)
-                    .rows(rows)
-                    .create();
-
-            assertThat(document.getCellValue(0, "Name")).isEqualTo("Hyunsoo");
-            assertThat(document.getCellValue(1, "Age", Integer.class)).isEqualTo(25);
+            assertThat(sheet.getCellValue(0, "Name")).isEqualTo("Hyunsoo");
+            assertThat(sheet.getCellValue(1, "Age", Integer.class)).isEqualTo(25);
 
         }).doesNotThrowAnyException();
     }
@@ -153,21 +149,17 @@ class ValueObjectComparisonTest {
     @DisplayName("After: BigDecimal과 LocalDate를 포함한 안전한 처리")
     void afterValueObjects_SafeBigDecimalAndLocalDateHandling() {
         assertThatCode(() -> {
-            SheetName sheetName = new SheetName("FinancialData");
-            Headers headers = Headers.of("Account ID", "Balance", "Opening Date");
-            DocumentRows rows = DocumentRows.of(Arrays.asList(
-                    Arrays.asList(1001L, new BigDecimal("150000.50"), LocalDate.of(2020, 1, 15)),
-                    Arrays.asList(1002L, new BigDecimal("85000.75"), LocalDate.of(2021, 6, 10))
-            ), 3);
+            ExcelSheet sheet = ExcelSheet.builder()
+                    .name("FinancialData")
+                    .headers("Account ID", "Balance", "Opening Date")
+                    .rows(Arrays.asList(
+                            Arrays.asList(1001L, new BigDecimal("150000.50"), LocalDate.of(2020, 1, 15)),
+                            Arrays.asList(1002L, new BigDecimal("85000.75"), LocalDate.of(2021, 6, 10))
+                    ))
+                    .build();
 
-            ExcelDocument document = ExcelDocument.reader()
-                    .sheet(sheetName)
-                    .headers(headers)
-                    .rows(rows)
-                    .create();
-
-            assertThat(document.getCellValue(0, "Balance", BigDecimal.class)).isEqualTo(new BigDecimal("150000.50"));
-            assertThat(document.getCellValue(1, "Opening Date", LocalDate.class)).isEqualTo(LocalDate.of(2021, 6, 10));
+            assertThat(sheet.getCellValue(0, "Balance", BigDecimal.class)).isEqualTo(new BigDecimal("150000.50"));
+            assertThat(sheet.getCellValue(1, "Opening Date", LocalDate.class)).isEqualTo(LocalDate.of(2021, 6, 10));
 
         }).doesNotThrowAnyException();
     }
@@ -176,21 +168,17 @@ class ValueObjectComparisonTest {
     @DisplayName("After: LocalDateTime을 포함한 안전한 처리")
     void afterValueObjects_SafeLocalDateTimeHandling() {
         assertThatCode(() -> {
-            SheetName sheetName = new SheetName("EventLog");
-            Headers headers = Headers.of("Event ID", "Event Type", "Timestamp", "User ID");
-            DocumentRows rows = DocumentRows.of(Arrays.asList(
-                    Arrays.asList(1L, "LOGIN", LocalDateTime.of(2024, 1, 15, 9, 30, 0), "user123"),
-                    Arrays.asList(2L, "LOGOUT", LocalDateTime.of(2024, 1, 15, 17, 45, 30), "user456")
-            ), 4);
+            ExcelSheet sheet = ExcelSheet.builder()
+                    .name("EventLog")
+                    .headers("Event ID", "Event Type", "Timestamp", "User ID")
+                    .rows(Arrays.asList(
+                            Arrays.asList(1L, "LOGIN", LocalDateTime.of(2024, 1, 15, 9, 30, 0), "user123"),
+                            Arrays.asList(2L, "LOGOUT", LocalDateTime.of(2024, 1, 15, 17, 45, 30), "user456")
+                    ))
+                    .build();
 
-            ExcelDocument document = ExcelDocument.reader()
-                    .sheet(sheetName)
-                    .headers(headers)
-                    .rows(rows)
-                    .create();
-
-            assertThat(document.getCellValue(0, "Timestamp", LocalDateTime.class)).isEqualTo(LocalDateTime.of(2024, 1, 15, 9, 30, 0));
-            assertThat(document.getCellValue(1, "User ID")).isEqualTo("user456");
+            assertThat(sheet.getCellValue(0, "Timestamp", LocalDateTime.class)).isEqualTo(LocalDateTime.of(2024, 1, 15, 9, 30, 0));
+            assertThat(sheet.getCellValue(1, "User ID")).isEqualTo("user456");
 
         }).doesNotThrowAnyException();
     }

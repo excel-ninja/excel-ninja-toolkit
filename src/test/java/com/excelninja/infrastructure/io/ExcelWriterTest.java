@@ -3,7 +3,10 @@ package com.excelninja.infrastructure.io;
 import com.excelninja.application.facade.NinjaExcel;
 import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
-import com.excelninja.domain.model.ExcelDocument;
+import com.excelninja.domain.model.ExcelWorkbook;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -152,7 +155,7 @@ class ExcelWriterTest {
         );
 
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        ExcelDocument document = ExcelDocument.writer().objects(usersToWrite).sheetName("EmployeeData").create();
+        ExcelWorkbook document = ExcelWorkbook.builder().sheet("EmployeeData", usersToWrite).build();
         NinjaExcel.write(document, byteArrayOutputStream);
         byte[] bytes = byteArrayOutputStream.toByteArray();
         assertTrue(bytes.length > 0);
@@ -191,7 +194,7 @@ class ExcelWriterTest {
 
         Path tempFile = Files.createTempFile("enhanced_users_test", ".xlsx");
         try {
-            ExcelDocument excelDocument = ExcelDocument.writer().objects(usersToWrite).create();
+            ExcelWorkbook excelDocument = ExcelWorkbook.builder().sheet(usersToWrite).build();
             NinjaExcel.write(excelDocument, tempFile.toString());
             assertTrue(Files.exists(tempFile));
             assertTrue(Files.size(tempFile) > 0);
@@ -238,13 +241,13 @@ class ExcelWriterTest {
         );
 
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        ExcelDocument document = ExcelDocument.writer().objects(usersWithPreciseDecimals).sheetName("PrecisionTest").create();
+        ExcelWorkbook document = ExcelWorkbook.builder().sheet("PrecisionTest",usersWithPreciseDecimals).build();
         NinjaExcel.write(document, byteArrayOutputStream);
         byte[] bytes = byteArrayOutputStream.toByteArray();
 
-        try (org.apache.poi.ss.usermodel.Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
-            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheet("PrecisionTest");
-            org.apache.poi.ss.usermodel.Row row1 = sheet.getRow(1);
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getSheet("PrecisionTest");
+            Row row1 = sheet.getRow(1);
             assertEquals(12345.6789, row1.getCell(3).getNumericCellValue(), 0.0001);
         }
     }
@@ -266,7 +269,7 @@ class ExcelWriterTest {
 
         Path tempFile = Files.createTempFile("date_test", ".xlsx");
         try {
-            ExcelDocument document = ExcelDocument.writer().objects(usersWithDates).sheetName("DateTest").create();
+            ExcelWorkbook document = ExcelWorkbook.builder().sheet("DateTest",usersWithDates).build();
             NinjaExcel.write(document, tempFile.toString());
 
             List<UserReadDto> readUsers = NinjaExcel.read(tempFile.toFile(), UserReadDto.class);
