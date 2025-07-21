@@ -27,8 +27,9 @@ dependencies {
 
     testImplementation("org.assertj:assertj-core:3.25.3")
 
-    implementation 'org.apache.poi:poi:4.1.2'
-    implementation 'org.apache.poi:poi-ooxml:4.1.2'
+    implementation 'org.apache.poi:poi:5.4.1'
+    implementation 'org.apache.poi:poi-ooxml:5.4.1'
+    implementation 'org.apache.commons:commons-lang3:3.18.0'
 }
 
 tasks.named('test') {

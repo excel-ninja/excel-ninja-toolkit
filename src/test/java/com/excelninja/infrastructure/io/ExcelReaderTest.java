@@ -3,7 +3,7 @@ package com.excelninja.infrastructure.io;
 import com.excelninja.application.facade.NinjaExcel;
 import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
-import com.excelninja.domain.model.ExcelDocument;
+import com.excelninja.domain.model.ExcelWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -81,8 +81,8 @@ class ExcelReaderTest {
         );
 
         Path testFile = tempDir.resolve("users_test.xlsx");
-        ExcelDocument document = ExcelDocument.writer().objects(testData).create();
-        NinjaExcel.write(document, testFile.toString());
+        ExcelWorkbook workbook = ExcelWorkbook.builder().sheet(testData).build();
+        NinjaExcel.write(workbook, testFile.toString());
 
         List<UserTestDto> readDTO = NinjaExcel.read(testFile.toFile(), UserTestDto.class);
 
@@ -129,8 +129,8 @@ class ExcelReaderTest {
         );
 
         Path testFile = tempDir.resolve("multiple_users_test.xlsx");
-        ExcelDocument document = ExcelDocument.writer().objects(testData).create();
-        NinjaExcel.write(document, testFile.toString());
+        ExcelWorkbook workbook = ExcelWorkbook.builder().sheet(testData).build();
+        NinjaExcel.write(workbook, testFile.toString());
 
         List<UserTestDto> readUsers = NinjaExcel.read(testFile.toFile(), UserTestDto.class);
 
