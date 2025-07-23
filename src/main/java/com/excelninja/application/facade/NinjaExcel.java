@@ -1,30 +1,40 @@
 package com.excelninja.application.facade;
 
 import com.excelninja.domain.exception.DocumentConversionException;
+import com.excelninja.domain.exception.EntityMappingException;
 import com.excelninja.domain.exception.HeaderMismatchException;
 import com.excelninja.domain.model.*;
+import com.excelninja.domain.port.WorkbookReader;
 import com.excelninja.infrastructure.converter.DefaultConverter;
 import com.excelninja.infrastructure.io.PoiWorkbookReader;
 import com.excelninja.infrastructure.io.PoiWorkbookWriter;
+import com.excelninja.infrastructure.io.StreamingWorkbookReader;
 import com.excelninja.infrastructure.metadata.EntityMetadata;
 import com.excelninja.infrastructure.metadata.FieldMapping;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class NinjaExcel {
     private static final Logger logger = Logger.getLogger(NinjaExcel.class.getName());
-    private static final PoiWorkbookReader WORKBOOK_READER = new PoiWorkbookReader();
+    private static final PoiWorkbookReader POI_WORKBOOK_READER = new PoiWorkbookReader();
+    private static final StreamingWorkbookReader STREAMING_WORKBOOK_READER = new StreamingWorkbookReader();
     private static final PoiWorkbookWriter WORKBOOK_WRITER = new PoiWorkbookWriter();
     private static final DefaultConverter CONVERTER = new DefaultConverter();
 
+    private static final long STREAMING_THRESHOLD_BYTES = 10 * 1024 * 1024; // 10MB
+    private static final int DEFAULT_CHUNK_SIZE = 1000;
+
     private NinjaExcel() {}
+
+    public static void setStreamingThreshold(long thresholdBytes) {
+        logger.info(String.format("[NINJA-EXCEL] Streaming threshold updated to %.2f MB",
+                thresholdBytes / (1024.0 * 1024.0)));
+    }
 
     public static <T> List<T> read(
             String filePath,
@@ -45,28 +55,27 @@ public final class NinjaExcel {
         long startTime = System.currentTimeMillis();
         String fileName = file.getName();
         long fileSize = file.length();
+        boolean useStreaming = fileSize > 1024 * 1024; // 1MB for simplicity
 
-        logger.fine(String.format("[NINJA-EXCEL] Reading Excel file: %s (%.2f KB) [Cache size: %d]",
-                fileName, fileSize / 1024.0, EntityMetadata.getCacheSize()));
+        logger.info(String.format("[NINJA-EXCEL] Reading Excel file: %s (%.2f MB) using %s reader",
+                fileName, fileSize / (1024.0 * 1024.0),
+                useStreaming ? "STREAMING" : "POI"));
 
         try {
-            ExcelWorkbook workbook = WORKBOOK_READER.read(file);
-            String firstSheetName = workbook.getSheetNames().iterator().next();
-            ExcelSheet sheet = workbook.getSheet(firstSheetName);
-            List<T> result = convertSheetToEntities(sheet, clazz);
-
+            if (useStreaming) {
+                return readWithStreaming(file, clazz);
+            } else {
+                return readWithPoi(file, clazz);
+            }
+        } catch (EntityMappingException | HeaderMismatchException e) {
+            throw e;
+        } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
-            double recordsPerSecond = calculateRecordsPerSecond(result.size(), duration);
-
-            logger.fine(String.format("[NINJA-EXCEL] Successfully read %d records from %s in %d ms (%.2f records/sec) [Cache size: %d]",
-                    result.size(), fileName, duration, recordsPerSecond, EntityMetadata.getCacheSize()));
-
-            return result;
-        } catch (IOException e) {
-            long duration = System.currentTimeMillis() - startTime;
-            logger.severe(String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration));
-            throw new DocumentConversionException("Failed to read Excel file: " + file.getName() + ". Please check if the file exists and is not corrupted.", e);
+            logger.log(Level.SEVERE, String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration), e);
+            throw new DocumentConversionException("Failed to read Excel file: " + file.getName() +
+                    ". Please check if the file exists and is not corrupted.", e);
         }
+        // =================================================================
     }
 
     public static <T> List<T> readSheet(
@@ -86,12 +95,17 @@ public final class NinjaExcel {
 
         long startTime = System.currentTimeMillis();
         String fileName = file.getName();
+        long fileSize = file.length();
+        boolean useStreaming = shouldUseStreaming(fileSize);
 
-        logger.fine(String.format("[NINJA-EXCEL] Reading sheet '%s' from Excel file: %s [Cache size: %d]",
-                sheetName, fileName, EntityMetadata.getCacheSize()));
+        logger.info(String.format("[NINJA-EXCEL] Reading sheet '%s' from Excel file: %s (%.2f MB) using %s reader [Cache size: %d]",
+                sheetName, fileName, fileSize / (1024.0 * 1024.0),
+                useStreaming ? "STREAMING" : "POI",
+                EntityMetadata.getCacheSize()));
 
         try {
-            ExcelWorkbook workbook = WORKBOOK_READER.read(file);
+            WorkbookReader reader = useStreaming ? STREAMING_WORKBOOK_READER : POI_WORKBOOK_READER;
+            ExcelWorkbook workbook = reader.read(file);
             ExcelSheet sheet = workbook.getSheet(sheetName);
 
             if (sheet == null) {
@@ -103,8 +117,9 @@ public final class NinjaExcel {
             long duration = System.currentTimeMillis() - startTime;
             double recordsPerSecond = calculateRecordsPerSecond(result.size(), duration);
 
-            logger.fine(String.format("[NINJA-EXCEL] Successfully read %d records from sheet '%s' in %s in %d ms (%.2f records/sec) [Cache size: %d]",
-                    result.size(), sheetName, fileName, duration, recordsPerSecond, EntityMetadata.getCacheSize()));
+            logger.info(String.format("[NINJA-EXCEL] Successfully read %d records from sheet '%s' in %s in %d ms (%.2f records/sec) using %s [Cache size: %d]",
+                    result.size(), sheetName, fileName, duration, recordsPerSecond,
+                    useStreaming ? "STREAMING" : "POI", EntityMetadata.getCacheSize()));
 
             return result;
         } catch (IOException e) {
@@ -129,12 +144,17 @@ public final class NinjaExcel {
 
         long startTime = System.currentTimeMillis();
         String fileName = file.getName();
+        long fileSize = file.length();
+        boolean useStreaming = shouldUseStreaming(fileSize);
 
-        logger.fine(String.format("[NINJA-EXCEL] Reading all sheets from Excel file: %s [Cache size: %d]",
-                fileName, EntityMetadata.getCacheSize()));
+        logger.info(String.format("[NINJA-EXCEL] Reading all sheets from Excel file: %s (%.2f MB) using %s reader [Cache size: %d]",
+                fileName, fileSize / (1024.0 * 1024.0),
+                useStreaming ? "STREAMING" : "POI",
+                EntityMetadata.getCacheSize()));
 
         try {
-            ExcelWorkbook workbook = WORKBOOK_READER.read(file);
+            WorkbookReader reader = useStreaming ? STREAMING_WORKBOOK_READER : POI_WORKBOOK_READER;
+            ExcelWorkbook workbook = reader.read(file);
             Map<String, List<T>> result = new LinkedHashMap<>();
 
             for (String sheetName : workbook.getSheetNames()) {
@@ -145,14 +165,61 @@ public final class NinjaExcel {
             long duration = System.currentTimeMillis() - startTime;
             int totalRecords = result.values().stream().mapToInt(List::size).sum();
 
-            logger.fine(String.format("[NINJA-EXCEL] Successfully read %d sheets with %d total records from %s in %d ms [Cache size: %d]",
-                    result.size(), totalRecords, fileName, duration, EntityMetadata.getCacheSize()));
+            logger.info(String.format("[NINJA-EXCEL] Successfully read %d sheets with %d total records from %s in %d ms using %s [Cache size: %d]",
+                    result.size(), totalRecords, fileName, duration,
+                    useStreaming ? "STREAMING" : "POI", EntityMetadata.getCacheSize()));
 
             return result;
         } catch (IOException e) {
             long duration = System.currentTimeMillis() - startTime;
             logger.severe(String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration));
             throw new DocumentConversionException("Failed to read Excel file: " + file.getName(), e);
+        }
+    }
+
+    public static <T> Iterator<List<T>> readInChunks(
+            String filePath,
+            Class<T> clazz
+    ) {
+        return readInChunks(new File(filePath), clazz, DEFAULT_CHUNK_SIZE);
+    }
+
+    public static <T> Iterator<List<T>> readInChunks(
+            File file,
+            Class<T> clazz
+    ) {
+        return readInChunks(file, clazz, DEFAULT_CHUNK_SIZE);
+    }
+
+    public static <T> Iterator<List<T>> readInChunks(
+            String filePath,
+            Class<T> clazz,
+            int chunkSize
+    ) {
+        return readInChunks(new File(filePath), clazz, chunkSize);
+    }
+
+    public static <T> Iterator<List<T>> readInChunks(
+            File file,
+            Class<T> clazz,
+            int chunkSize
+    ) {
+        validateReadInputs(file, clazz);
+
+        if (chunkSize <= 0) {
+            throw new DocumentConversionException("Chunk size must be positive");
+        }
+
+        long fileSize = file.length();
+        String fileName = file.getName();
+
+        logger.info(String.format("[NINJA-EXCEL] Creating chunk iterator for Excel file: %s (%.2f MB) with chunk size: %d",
+                fileName, fileSize / (1024.0 * 1024.0), chunkSize));
+
+        try {
+            return STREAMING_WORKBOOK_READER.readInChunks(file, clazz, chunkSize);
+        } catch (IOException e) {
+            throw new DocumentConversionException("Failed to create chunk iterator for file: " + fileName, e);
         }
     }
 
@@ -173,12 +240,17 @@ public final class NinjaExcel {
 
         long startTime = System.currentTimeMillis();
         String fileName = file.getName();
+        long fileSize = file.length();
+        boolean useStreaming = shouldUseStreaming(fileSize);
 
-        logger.fine(String.format("[NINJA-EXCEL] Reading specified sheets %s from Excel file: %s [Cache size: %d]",
-                sheetNames, fileName, EntityMetadata.getCacheSize()));
+        logger.info(String.format("[NINJA-EXCEL] Reading specified sheets %s from Excel file: %s (%.2f MB) using %s reader [Cache size: %d]",
+                sheetNames, fileName, fileSize / (1024.0 * 1024.0),
+                useStreaming ? "STREAMING" : "POI",
+                EntityMetadata.getCacheSize()));
 
         try {
-            ExcelWorkbook workbook = WORKBOOK_READER.read(file);
+            WorkbookReader reader = useStreaming ? STREAMING_WORKBOOK_READER : POI_WORKBOOK_READER;
+            ExcelWorkbook workbook = reader.read(file);
             Map<String, List<T>> result = new LinkedHashMap<>();
 
             for (String sheetName : sheetNames) {
@@ -191,8 +263,9 @@ public final class NinjaExcel {
             long duration = System.currentTimeMillis() - startTime;
             int totalRecords = result.values().stream().mapToInt(List::size).sum();
 
-            logger.fine(String.format("[NINJA-EXCEL] Successfully read %d sheets with %d total records from %s in %d ms [Cache size: %d]",
-                    result.size(), totalRecords, fileName, duration, EntityMetadata.getCacheSize()));
+            logger.info(String.format("[NINJA-EXCEL] Successfully read %d sheets with %d records from %s in %d ms using %s [Cache size: %d]",
+                    result.size(), totalRecords, fileName, duration,
+                    useStreaming ? "STREAMING" : "POI", EntityMetadata.getCacheSize()));
 
             return result;
         } catch (IOException e) {
@@ -210,7 +283,11 @@ public final class NinjaExcel {
         validateReadInputs(file, Object.class);
 
         try {
-            ExcelWorkbook workbook = WORKBOOK_READER.read(file);
+            long fileSize = file.length();
+            boolean useStreaming = shouldUseStreaming(fileSize);
+            WorkbookReader reader = useStreaming ? STREAMING_WORKBOOK_READER : POI_WORKBOOK_READER;
+
+            ExcelWorkbook workbook = reader.read(file);
             return new ArrayList<>(workbook.getSheetNames());
         } catch (IOException e) {
             throw new DocumentConversionException("Failed to read Excel file: " + file.getName(), e);
@@ -294,6 +371,37 @@ public final class NinjaExcel {
             logger.severe(String.format("[NINJA-EXCEL] Failed to write Excel workbook to output stream after %d ms", duration));
             throw new DocumentConversionException("Failed to write Excel workbook to output stream", e);
         }
+    }
+
+    private static boolean shouldUseStreaming(long fileSize) {
+        boolean useStreaming = fileSize > STREAMING_THRESHOLD_BYTES;
+        logger.fine(String.format(
+                "[NINJA-EXCEL] File size: %.2f MB, threshold: %.2f MB, using %s reader",
+                fileSize / (1024.0 * 1024.0),
+                STREAMING_THRESHOLD_BYTES / (1024.0 * 1024.0),
+                useStreaming ? "STREAMING" : "POI"
+        ));
+        return useStreaming;
+    }
+
+    private static <T> List<T> readWithPoi(
+            File file,
+            Class<T> clazz
+    ) throws IOException {
+        ExcelWorkbook workbook = POI_WORKBOOK_READER.read(file);
+        String firstSheetName = workbook.getSheetNames().iterator().next();
+        ExcelSheet sheet = workbook.getSheet(firstSheetName);
+        return convertSheetToEntities(sheet, clazz);
+    }
+
+    private static <T> List<T> readWithStreaming(
+            File file,
+            Class<T> clazz
+    ) throws IOException {
+        ExcelWorkbook workbook = STREAMING_WORKBOOK_READER.read(file);
+        String firstSheetName = workbook.getSheetNames().iterator().next();
+        ExcelSheet sheet = workbook.getSheet(firstSheetName);
+        return convertSheetToEntities(sheet, clazz);
     }
 
     private static <T> List<T> convertSheetToEntities(
@@ -383,9 +491,5 @@ public final class NinjaExcel {
             long duration
     ) {
         return duration > 0 ? (recordCount * 1000.0 / duration) : 0;
-    }
-
-    static {
-        logger.fine("[NINJA-EXCEL] Ninja Excel activated with unified API - simple reads, flexible writes!");
     }
 }
