@@ -61,12 +61,21 @@ public class User {
 #### 2. Read Excel to DTO List
 
 ```java
-// From file path
+// From file path - reads first sheet
 List<User> users = NinjaExcel.read("users.xlsx", User.class);
 
-// From File object
+// From File object - reads first sheet
 File file = new File("users.xlsx");
 List<User> users = NinjaExcel.read(file, User.class);
+
+// Read specific sheet
+List<User> users = NinjaExcel.readSheet("users.xlsx", "Sheet1", User.class);
+
+// Read all sheets
+Map<String, List<User>> allSheets = NinjaExcel.readAllSheets("users.xlsx", User.class);
+
+// Get sheet names
+List<String> sheetNames = NinjaExcel.getSheetNames("users.xlsx");
 ```
 
 #### 3. Write DTO List to Excel
@@ -77,18 +86,27 @@ List<User> users = Arrays.asList(
     new User(2L, "Bob", 32, "bob@example.com")
 );
 
-// Create document and write to file
-ExcelDocument document = ExcelDocument.writer()
-    .objects(users)
-    .sheetName("Users")
-    .create();
+// Create workbook with single sheet
+ExcelWorkbook workbook = ExcelWorkbook.builder()
+    .sheet("Users", users)
+    .build();
 
-NinjaExcel.write(document, "output.xlsx");
+// Write to file
+NinjaExcel.write(workbook, "output.xlsx");
 
 // Or write to OutputStream
 try (FileOutputStream out = new FileOutputStream("output.xlsx")) {
-    NinjaExcel.write(document, out);
+    NinjaExcel.write(workbook, out);
 }
+
+// Multiple sheets
+List<Employee> employees = Arrays.asList(/* employee data */);
+ExcelWorkbook multiSheet = ExcelWorkbook.builder()
+    .sheet("Users", users)
+    .sheet("Employees", employees)
+    .build();
+
+NinjaExcel.write(multiSheet, "multi-sheet.xlsx");
 ```
 
 ---
@@ -112,35 +130,39 @@ public class Employee {
 }
 ```
 
-### Document Builder Pattern
+### Large File Processing
 
-For more control over Excel generation:
+ExcelNinja automatically uses streaming for large files (>10MB):
 
 ```java
-ExcelDocument document = ExcelDocument.writer()
-    .objects(employees)
-    .sheetName("Employee Report")
-    .columnWidth(0, 5000)  // Set column width
-    .rowHeight(0, (short) 25)  // Set row height
-    .create();
+// For very large files, read in chunks
+Iterator<List<User>> chunks = NinjaExcel.readInChunks("large-file.xlsx", User.class, 1000);
+while (chunks.hasNext()) {
+    List<User> chunk = chunks.next();
+    // Process chunk
+}
+
+// Read multiple specific sheets
+List<String> sheetsToRead = Arrays.asList("Users", "Customers");
+Map<String, List<User>> selectedSheets = NinjaExcel.readSheets("workbook.xlsx", User.class, sheetsToRead);
 ```
 
-### Advanced Reading with Document API
+### Workbook Builder API
+
+For advanced workbook creation:
 
 ```java
-ExcelDocument document = NinjaExcel.read("data.xlsx", MyDto.class);
+// Using builder pattern for complex workbooks
+ExcelWorkbook workbook = ExcelWorkbook.builder()
+    .sheet("Users", userList)
+    .sheet("Products", productList)
+    .metadata(new WorkbookMetadata()) // Optional metadata
+    .build();
 
-// Access document metadata
-String sheetName = document.getSheetName().getValue();
-int rowCount = document.getRowCount();
-int columnCount = document.getColumnCount();
-
-// Query specific cells
-Object cellValue = document.getCellValue(0, "Name");
-List<Object> ageColumn = document.getColumn("Age");
-
-// Convert to entities
-List<MyDto> entities = document.convertToEntities(MyDto.class, new DefaultConverter());
+// Access workbook information
+Set<String> sheetNames = workbook.getSheetNames();
+ExcelSheet userSheet = workbook.getSheet("Users");
+WorkbookMetadata metadata = workbook.getMetadata();
 ```
 
 ---
@@ -158,16 +180,24 @@ ExcelNinja follows clean architecture principles:
 
 📁 Domain Layer
 ├── model/                       # Value objects & domain models
-│   ├── ExcelDocument.java      # Core document aggregate
+│   ├── ExcelWorkbook.java      # Core workbook aggregate
+│   ├── ExcelSheet.java         # Sheet representation
 │   ├── Headers.java            # Header management
 │   ├── DocumentRows.java       # Row collection
 │   └── SheetName.java          # Sheet name validation
 ├── annotation/                  # Column mapping annotations
+├── port/                       # Domain ports
+│   ├── WorkbookReader.java     # Reading interface
+│   └── WorkbookWriter.java     # Writing interface
 └── exception/                   # Domain-specific exceptions
 
 📁 Infrastructure Layer
-├── io/                         # Apache POI adapters
+├── io/                         # Apache POI & streaming adapters
+│   ├── PoiWorkbookReader.java  # Standard POI reader
+│   ├── PoiWorkbookWriter.java  # Standard POI writer
+│   └── StreamingWorkbookReader.java # Streaming reader for large files
 ├── converter/                  # Type conversion implementation
+├── metadata/                   # Entity metadata handling
 └── util/                       # Reflection utilities
 ```
 
@@ -207,7 +237,7 @@ private Long id;
 | Component | Description |
 |-----------|-------------|
 | **`NinjaExcel`** | Main facade providing `read()` and `write()` methods |
-| **`ExcelDocument`** | Immutable document representation with builder patterns |
+| **`ExcelWorkbook`** | Workbook representation supporting multiple sheets |
 | **`@ExcelReadColumn`** | Annotation for Excel → DTO mapping |
 | **`@ExcelWriteColumn`** | Annotation for DTO → Excel mapping |
 | **`DefaultConverter`** | Handles type conversion between Excel and Java types |
@@ -299,8 +329,8 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](https:
 
 - [ ] **Excel Templates**: Support for predefined Excel templates
 - [ ] **Cell Styling**: Rich formatting and styling options
-- [ ] **Multiple Sheets**: Read/write multiple sheets in one operation
-- [ ] **Streaming**: Support for large files with streaming API
+- [x] **Multiple Sheets**: Read/write multiple sheets in one operation
+- [x] **Streaming**: Support for large files with streaming API
 - [ ] **Custom Validators**: Field-level validation annotations
 - [ ] **Excel Functions**: Support for Excel formulas and functions
 
