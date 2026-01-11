@@ -21,19 +21,42 @@ import java.util.logging.Logger;
 
 public final class NinjaExcel {
     private static final Logger logger = Logger.getLogger(NinjaExcel.class.getName());
+
+    // Thread-safe: All reader/writer implementations are stateless
     private static final PoiWorkbookReader POI_WORKBOOK_READER = new PoiWorkbookReader();
     private static final StreamingWorkbookReader STREAMING_WORKBOOK_READER = new StreamingWorkbookReader();
     private static final PoiWorkbookWriter WORKBOOK_WRITER = new PoiWorkbookWriter();
     private static final DefaultConverter CONVERTER = new DefaultConverter();
 
     private static final long STREAMING_THRESHOLD_BYTES = 10 * 1024 * 1024; // 10MB
+    private static volatile long streamingThreshold = STREAMING_THRESHOLD_BYTES;
     private static final int DEFAULT_CHUNK_SIZE = 1000;
 
     private NinjaExcel() {}
 
+    /**
+     * Sets the file size threshold for automatic streaming mode selection.
+     * Files larger than this threshold will use SAX-based streaming for memory efficiency.
+     *
+     * @param thresholdBytes the threshold in bytes (must be positive)
+     * @throws IllegalArgumentException if threshold is not positive
+     */
     public static void setStreamingThreshold(long thresholdBytes) {
+        if (thresholdBytes <= 0) {
+            throw new IllegalArgumentException("Threshold must be positive");
+        }
+        streamingThreshold = thresholdBytes;
         logger.info(String.format("[NINJA-EXCEL] Streaming threshold updated to %.2f MB",
                 thresholdBytes / (1024.0 * 1024.0)));
+    }
+
+    /**
+     * Gets the current streaming threshold in bytes.
+     *
+     * @return the current threshold in bytes
+     */
+    public static long getStreamingThreshold() {
+        return streamingThreshold;
     }
 
     public static <T> List<T> read(
@@ -55,7 +78,7 @@ public final class NinjaExcel {
         long startTime = System.currentTimeMillis();
         String fileName = file.getName();
         long fileSize = file.length();
-        boolean useStreaming = fileSize > 1024 * 1024; // 1MB for simplicity
+        boolean useStreaming = shouldUseStreaming(fileSize);
 
         logger.info(String.format("[NINJA-EXCEL] Reading Excel file: %s (%.2f MB) using %s reader",
                 fileName, fileSize / (1024.0 * 1024.0),
@@ -318,7 +341,7 @@ public final class NinjaExcel {
                 .mapToInt(sheetName -> workbook.getSheet(sheetName).getRows().size())
                 .sum();
 
-        logger.fine(String.format("[NINJA-EXCEL] Writing Excel workbook with %d sheets and %d total records to file: %s [Cache size: %d]",
+        logger.info(String.format("[NINJA-EXCEL] Writing Excel workbook with %d sheets and %d total records to file: %s [Cache size: %d]",
                 workbook.getSheetNames().size(), totalRecords, fileName, EntityMetadata.getCacheSize()));
 
         try {
@@ -328,7 +351,7 @@ public final class NinjaExcel {
             long duration = System.currentTimeMillis() - startTime;
             double recordsPerSecond = calculateRecordsPerSecond(totalRecords, duration);
 
-            logger.fine(String.format("[NINJA-EXCEL] Successfully wrote workbook with %d sheets and %d records to %s (%.2f KB) in %d ms (%.2f records/sec) [Cache size: %d]",
+            logger.info(String.format("[NINJA-EXCEL] Successfully wrote workbook with %d sheets and %d records to %s (%.2f KB) in %d ms (%.2f records/sec) [Cache size: %d]",
                     workbook.getSheetNames().size(), totalRecords, fileName, fileSize / 1024.0, duration, recordsPerSecond, EntityMetadata.getCacheSize()));
 
         } catch (IOException e) {
@@ -354,7 +377,7 @@ public final class NinjaExcel {
                 .mapToInt(sheetName -> workbook.getSheet(sheetName).getRows().size())
                 .sum();
 
-        logger.fine(String.format("[NINJA-EXCEL] Writing Excel workbook with %d sheets and %d total records to output stream [Cache size: %d]",
+        logger.info(String.format("[NINJA-EXCEL] Writing Excel workbook with %d sheets and %d total records to output stream [Cache size: %d]",
                 workbook.getSheetNames().size(), totalRecords, EntityMetadata.getCacheSize()));
 
         try {
@@ -363,7 +386,7 @@ public final class NinjaExcel {
             long duration = System.currentTimeMillis() - startTime;
             double recordsPerSecond = calculateRecordsPerSecond(totalRecords, duration);
 
-            logger.fine(String.format("[NINJA-EXCEL] Successfully wrote workbook with %d sheets and %d records to output stream in %d ms (%.2f records/sec) [Cache size: %d]",
+            logger.info(String.format("[NINJA-EXCEL] Successfully wrote workbook with %d sheets and %d records to output stream in %d ms (%.2f records/sec) [Cache size: %d]",
                     workbook.getSheetNames().size(), totalRecords, duration, recordsPerSecond, EntityMetadata.getCacheSize()));
 
         } catch (IOException e) {
@@ -374,11 +397,11 @@ public final class NinjaExcel {
     }
 
     private static boolean shouldUseStreaming(long fileSize) {
-        boolean useStreaming = fileSize > STREAMING_THRESHOLD_BYTES;
+        boolean useStreaming = fileSize > streamingThreshold;
         logger.fine(String.format(
                 "[NINJA-EXCEL] File size: %.2f MB, threshold: %.2f MB, using %s reader",
                 fileSize / (1024.0 * 1024.0),
-                STREAMING_THRESHOLD_BYTES / (1024.0 * 1024.0),
+                streamingThreshold / (1024.0 * 1024.0),
                 useStreaming ? "STREAMING" : "POI"
         ));
         return useStreaming;

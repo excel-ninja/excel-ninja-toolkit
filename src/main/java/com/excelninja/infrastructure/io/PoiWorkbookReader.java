@@ -17,6 +17,12 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ * Apache POI-based Excel workbook reader.
+ *
+ * <p><b>Thread Safety:</b> This class is stateless and thread-safe.
+ * Multiple threads can safely use the same instance concurrently.
+ */
 public class PoiWorkbookReader implements WorkbookReader {
 
     @Override
@@ -52,7 +58,7 @@ public class PoiWorkbookReader implements WorkbookReader {
         Row headerRow = rowIterator.next();
         List<String> headerTitles = new ArrayList<>();
         for (Cell cell : headerRow) {
-            String headerValue = cell.getStringCellValue();
+            String headerValue = getCellValueAsString(cell);
             if (headerValue == null || headerValue.trim().isEmpty()) {
                 throw new InvalidDocumentStructureException("Header cannot be empty at column " + cell.getColumnIndex() + " in sheet " + sheetName);
             }
@@ -98,6 +104,54 @@ public class PoiWorkbookReader implements WorkbookReader {
                 return cell.getBooleanCellValue();
             case FORMULA:
                 return cell.getCellFormula();
+            case BLANK:
+                return null;
+            default:
+                return cell.toString();
+        }
+    }
+
+    /**
+     * Converts any cell value to a string representation.
+     * This is useful for reading headers that may be numbers, formulas, or other types.
+     *
+     * @param cell the cell to convert
+     * @return the string representation of the cell value, or null if the cell is blank
+     */
+    private String getCellValueAsString(Cell cell) {
+        if (cell == null) {
+            return null;
+        }
+
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                // Convert number to string (remove decimal point for integers)
+                double numValue = cell.getNumericCellValue();
+                if (numValue == Math.floor(numValue) && !Double.isInfinite(numValue)) {
+                    return String.valueOf((long) numValue);
+                }
+                return String.valueOf(numValue);
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                // Try to get cached formula result
+                try {
+                    return cell.getStringCellValue();
+                } catch (IllegalStateException e) {
+                    // If formula result is numeric, get numeric value
+                    try {
+                        double formulaNumValue = cell.getNumericCellValue();
+                        if (formulaNumValue == Math.floor(formulaNumValue) && !Double.isInfinite(formulaNumValue)) {
+                            return String.valueOf((long) formulaNumValue);
+                        }
+                        return String.valueOf(formulaNumValue);
+                    } catch (IllegalStateException e2) {
+                        // If all else fails, return formula string
+                        return cell.getCellFormula();
+                    }
+                }
             case BLANK:
                 return null;
             default:

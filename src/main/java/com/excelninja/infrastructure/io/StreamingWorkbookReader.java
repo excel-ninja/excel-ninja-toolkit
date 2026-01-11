@@ -34,6 +34,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * SAX-based streaming Excel workbook reader for large files.
+ *
+ * <p><b>Thread Safety:</b> This class is stateless and thread-safe.
+ * Multiple threads can safely use the same instance concurrently.
+ * Each read operation creates its own parsing context.
+ */
 public class StreamingWorkbookReader implements WorkbookReader {
     private static final Logger logger = Logger.getLogger(StreamingWorkbookReader.class.getName());
 
@@ -44,12 +51,44 @@ public class StreamingWorkbookReader implements WorkbookReader {
         }
     }
 
+    /**
+     * Reads an Excel workbook from the given InputStream.
+     *
+     * <p><b>Important:</b> This method will fully consume the InputStream.
+     * The stream should not be reused after calling this method.
+     * The caller is responsible for closing the InputStream after this method returns.
+     *
+     * <p>Note: OPCPackage.open() may create temporary files during processing.
+     * These are automatically cleaned up when the package is closed.
+     *
+     * @param inputStream the input stream to read from (will be consumed but not closed by this method)
+     * @return the parsed ExcelWorkbook
+     * @throws IOException if an I/O error occurs
+     * @throws DocumentConversionException if the Excel format is invalid or parsing fails
+     */
     @Override
     public ExcelWorkbook read(InputStream inputStream) throws IOException {
-        try (OPCPackage opcPackage = OPCPackage.open(inputStream)) {
+        if (inputStream == null) {
+            throw new DocumentConversionException("InputStream cannot be null");
+        }
+
+        OPCPackage opcPackage = null;
+        try {
+            // OPCPackage.open() consumes the stream and may create temporary files
+            opcPackage = OPCPackage.open(inputStream);
             return readFromOPCPackage(opcPackage);
+        } catch (DocumentConversionException e) {
+            throw e;
         } catch (Exception e) {
             throw new DocumentConversionException("Failed to read Excel file with streaming reader", e);
+        } finally {
+            if (opcPackage != null) {
+                try {
+                    opcPackage.close();
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "[NINJA-EXCEL] Error closing OPCPackage", e);
+                }
+            }
         }
     }
 
@@ -209,6 +248,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
 
         private List<T> nextChunk;
         private volatile boolean isProducerFinished = false;
+        private volatile boolean closed = false;
         private volatile Exception producerException = null;
 
         private static final Object END_OF_QUEUE = new Object(); // Poison Pill
@@ -252,6 +292,9 @@ public class StreamingWorkbookReader implements WorkbookReader {
 
         @Override
         public boolean hasNext() {
+            if (closed) {
+                return false;
+            }
             if (producerException != null) {
                 throw new DocumentConversionException("Error in background producer thread", producerException);
             }
@@ -300,12 +343,34 @@ public class StreamingWorkbookReader implements WorkbookReader {
 
         @Override
         public void close() {
+            if (closed) {
+                return;
+            }
+            closed = true;
+
+            // 1. 생산자 스레드에 종료 신호
             producerThread.interrupt();
+
+            // 2. 스레드 종료 대기 (타임아웃 설정)
+            try {
+                producerThread.join(5000);  // 최대 5초 대기
+                if (producerThread.isAlive()) {
+                    logger.warning("[NINJA-EXCEL] Producer thread did not terminate within timeout");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.warning("[NINJA-EXCEL] Interrupted while waiting for producer thread");
+            }
+
+            // 3. 큐 정리
+            queue.clear();
+
+            // 4. InputStream 정리
             if (closeOnFinish && managedInputStream != null) {
                 try {
                     managedInputStream.close();
                 } catch (IOException e) {
-                    logger.log(Level.WARNING, "Error closing input stream", e);
+                    logger.log(Level.WARNING, "[NINJA-EXCEL] Error closing input stream", e);
                 }
             }
         }
