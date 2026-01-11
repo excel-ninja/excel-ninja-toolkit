@@ -8,10 +8,24 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class EntityMetadata<T> {
-    private static final Map<Class<?>, EntityMetadata<?>> METADATA_CACHE = new ConcurrentHashMap<>();
+    private static final Logger logger = Logger.getLogger(EntityMetadata.class.getName());
+    private static final int MAX_CACHE_SIZE = 1000;
+
+    private static final Map<Class<?>, EntityMetadata<?>> METADATA_CACHE =
+        Collections.synchronizedMap(new LinkedHashMap<Class<?>, EntityMetadata<?>>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<Class<?>, EntityMetadata<?>> eldest) {
+                boolean shouldRemove = size() > MAX_CACHE_SIZE;
+                if (shouldRemove) {
+                    logger.fine("[NINJA-EXCEL] Evicting metadata cache entry for: " + eldest.getKey().getName());
+                }
+                return shouldRemove;
+            }
+        });
 
     private final Class<T> entityType;
     private final Constructor<T> defaultConstructor;

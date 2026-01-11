@@ -10,6 +10,12 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Date;
 
+/**
+ * Default type converter for Excel cell values.
+ *
+ * <p><b>Thread Safety:</b> This class is stateless and thread-safe.
+ * Multiple threads can safely use the same instance concurrently.
+ */
 public class DefaultConverter implements ConverterPort {
 
     @Override

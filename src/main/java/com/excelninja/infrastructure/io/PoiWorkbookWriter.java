@@ -18,6 +18,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 
+/**
+ * Apache POI-based Excel workbook writer.
+ *
+ * <p><b>Thread Safety:</b> This class is stateless and thread-safe.
+ * Multiple threads can safely use the same instance concurrently.
+ */
 public class PoiWorkbookWriter implements WorkbookWriter {
 
     @Override
