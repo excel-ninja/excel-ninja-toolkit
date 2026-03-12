@@ -125,6 +125,22 @@ public class StreamingWorkbookReader implements WorkbookReader {
         return handler.buildExcelSheet(sheetName);
     }
 
+    private static boolean hasMeaningfulValues(List<Object> rowValues) {
+        return rowValues.stream().anyMatch(StreamingWorkbookReader::hasMeaningfulValue);
+    }
+
+    private static boolean hasMeaningfulValue(Object value) {
+        if (value == null) {
+            return false;
+        }
+
+        if (value instanceof String) {
+            return !((String) value).trim().isEmpty();
+        }
+
+        return true;
+    }
+
     public <T> Iterator<List<T>> readInChunks(
             File file,
             Class<T> entityType,
@@ -147,6 +163,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
         private String currentCellRef;
         private String currentCellType;
         private int currentCellStyleIndex;
+        private boolean isValueElement;
         private final StringBuilder currentCellValue = new StringBuilder();
 
         protected Map<Integer, Object> currentRowData;
@@ -174,6 +191,8 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 String styleStr = attributes.getValue("s");
                 currentCellStyleIndex = styleStr != null ? Integer.parseInt(styleStr) : -1;
                 currentCellValue.setLength(0);
+            } else if ("v".equals(qName) || "t".equals(qName)) {
+                isValueElement = true;
             }
         }
 
@@ -183,7 +202,9 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 int start,
                 int length
         ) {
-            currentCellValue.append(ch, start, length);
+            if (isValueElement) {
+                currentCellValue.append(ch, start, length);
+            }
         }
 
         @Override
@@ -196,6 +217,8 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 int colIdx = CellReference.convertColStringToIndex(currentCellRef.replaceAll("\\d", ""));
                 Object value = parseValue(currentCellValue.toString(), currentCellType, currentCellStyleIndex, sst, stylesTable);
                 currentRowData.put(colIdx, value);
+            } else if ("v".equals(qName) || "t".equals(qName)) {
+                isValueElement = false;
             } else if ("row".equals(qName)) {
                 processRow();
             }
@@ -228,7 +251,9 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 rowValues.forEach(val -> headers.add(val != null ? val.toString().trim() : ""));
                 isHeaderProcessed = true;
             } else {
-                allRows.add(rowValues);
+                if (hasMeaningfulValues(rowValues)) {
+                    allRows.add(rowValues);
+                }
             }
         }
 
@@ -404,10 +429,12 @@ public class StreamingWorkbookReader implements WorkbookReader {
                     prepareFieldMapping(headers);
                     isHeaderProcessed = true;
                 } else {
-                    try {
-                        queue.put(convertRowToEntity(rowValues));
-                    } catch (Exception e) {
-                        logger.warning("Failed to process or queue row: " + e.getMessage());
+                    if (hasMeaningfulValues(rowValues)) {
+                        try {
+                            queue.put(convertRowToEntity(rowValues));
+                        } catch (Exception e) {
+                            logger.warning("Failed to process or queue row: " + e.getMessage());
+                        }
                     }
                 }
             }
@@ -452,6 +479,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 case "s":
                     return sst.getItemAt(Integer.parseInt(value)).getString();
                 case "str":
+                case "inlineStr":
                     return value;
                 case "b":
                     return "1".equals(value);

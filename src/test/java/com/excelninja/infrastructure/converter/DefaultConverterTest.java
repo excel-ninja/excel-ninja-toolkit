@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,5 +83,38 @@ class DefaultConverterTest {
         assertThatThrownBy(() -> converter.convert("invalid_datetime", LocalDateTime.class))
                 .isInstanceOf(DocumentConversionException.class)
                 .hasMessageContaining("Cannot parse datetime string 'invalid_datetime'");
+    }
+
+    @Test
+    @DisplayName("Date to String uses stable ISO formatting")
+    void convertDateToStringUsesStableIsoFormatting() {
+        ZoneId zoneId = ZoneId.systemDefault();
+        Date dateOnly = Date.from(LocalDate.of(2024, 12, 25).atStartOfDay(zoneId).toInstant());
+        Date dateTime = Date.from(LocalDateTime.of(2024, 12, 25, 14, 30, 0).atZone(zoneId).toInstant());
+        Date dateTimeWithMillis = Date.from(LocalDateTime.of(2024, 12, 25, 14, 30, 0, 123_000_000).atZone(zoneId).toInstant());
+
+        assertThat(converter.convert(dateOnly, String.class)).isEqualTo("2024-12-25");
+        assertThat(converter.convert(dateTime, String.class)).isEqualTo("2024-12-25T14:30:00");
+        assertThat(converter.convert(dateTimeWithMillis, String.class)).isEqualTo("2024-12-25T14:30:00");
+    }
+
+    @Test
+    @DisplayName("Date targets can be created from string and java time values")
+    void convertToDate() {
+        ZoneId zoneId = ZoneId.systemDefault();
+
+        Date fromDateString = (Date) converter.convert("2024-12-25", Date.class);
+        assertThat(fromDateString.toInstant().atZone(zoneId).toLocalDate()).isEqualTo(LocalDate.of(2024, 12, 25));
+
+        Date fromDateTimeString = (Date) converter.convert("2024-12-25T14:30:05", Date.class);
+        assertThat(fromDateTimeString.toInstant().atZone(zoneId).toLocalDateTime())
+                .isEqualTo(LocalDateTime.of(2024, 12, 25, 14, 30, 5));
+
+        Date fromLocalDate = (Date) converter.convert(LocalDate.of(2024, 12, 25), Date.class);
+        assertThat(fromLocalDate.toInstant().atZone(zoneId).toLocalDate()).isEqualTo(LocalDate.of(2024, 12, 25));
+
+        Date fromLocalDateTime = (Date) converter.convert(LocalDateTime.of(2024, 12, 25, 14, 30, 5), Date.class);
+        assertThat(fromLocalDateTime.toInstant().atZone(zoneId).toLocalDateTime())
+                .isEqualTo(LocalDateTime.of(2024, 12, 25, 14, 30, 5));
     }
 }

@@ -12,7 +12,9 @@ import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
@@ -64,6 +66,62 @@ class ExcelReaderTest {
             this.birthday = birthday;
             this.lastUpdated = lastUpdated;
         }
+    }
+
+    public static class DateTargetWriteDto {
+        @ExcelWriteColumn(headerName = "DateAsDate", order = 1)
+        private final LocalDate dateAsDate;
+
+        @ExcelWriteColumn(headerName = "DateAsString", order = 2)
+        private final LocalDate dateAsString;
+
+        @ExcelWriteColumn(headerName = "DateAsLocalDate", order = 3)
+        private final LocalDate dateAsLocalDate;
+
+        @ExcelWriteColumn(headerName = "DateTimeAsString", order = 4)
+        private final LocalDateTime dateTimeAsString;
+
+        @ExcelWriteColumn(headerName = "DateTimeAsDate", order = 5)
+        private final LocalDateTime dateTimeAsDate;
+
+        @ExcelWriteColumn(headerName = "DateTimeAsLocalDateTime", order = 6)
+        private final LocalDateTime dateTimeAsLocalDateTime;
+
+        public DateTargetWriteDto(
+                LocalDate dateAsDate,
+                LocalDate dateAsString,
+                LocalDate dateAsLocalDate,
+                LocalDateTime dateTimeAsString,
+                LocalDateTime dateTimeAsDate,
+                LocalDateTime dateTimeAsLocalDateTime
+        ) {
+            this.dateAsDate = dateAsDate;
+            this.dateAsString = dateAsString;
+            this.dateAsLocalDate = dateAsLocalDate;
+            this.dateTimeAsString = dateTimeAsString;
+            this.dateTimeAsDate = dateTimeAsDate;
+            this.dateTimeAsLocalDateTime = dateTimeAsLocalDateTime;
+        }
+    }
+
+    public static class DateTargetReadDto {
+        @ExcelReadColumn(headerName = "DateAsDate")
+        private Date dateAsDate;
+
+        @ExcelReadColumn(headerName = "DateAsString")
+        private String dateAsString;
+
+        @ExcelReadColumn(headerName = "DateAsLocalDate")
+        private LocalDate dateAsLocalDate;
+
+        @ExcelReadColumn(headerName = "DateTimeAsString")
+        private String dateTimeAsString;
+
+        @ExcelReadColumn(headerName = "DateTimeAsDate")
+        private Date dateTimeAsDate;
+
+        @ExcelReadColumn(headerName = "DateTimeAsLocalDateTime")
+        private LocalDateTime dateTimeAsLocalDateTime;
     }
 
     @Test
@@ -158,5 +216,33 @@ class ExcelReaderTest {
         assertThat(charlie.salary).isEqualTo(new BigDecimal("120000.75"));
         assertThat(charlie.birthday).isEqualTo(LocalDate.of(1988, 12, 10));
         assertThat(charlie.lastUpdated).isEqualTo(LocalDateTime.of(2024, 1, 17, 9, 15, 0));
+    }
+
+    @Test
+    @DisplayName("Date cells can be mapped to Date, String, LocalDate and LocalDateTime")
+    void readDateCellsIntoMultipleTargetTypes() {
+        LocalDate dateOnly = LocalDate.of(2024, 12, 25);
+        LocalDateTime dateTime = LocalDateTime.of(2024, 12, 25, 14, 30, 5);
+        List<DateTargetWriteDto> testData = Arrays.asList(
+                new DateTargetWriteDto(dateOnly, dateOnly, dateOnly, dateTime, dateTime, dateTime)
+        );
+
+        Path testFile = tempDir.resolve("date_target_types.xlsx");
+        ExcelWorkbook workbook = ExcelWorkbook.builder().sheet(testData).build();
+        NinjaExcel.write(workbook, testFile.toString());
+
+        List<DateTargetReadDto> rows = NinjaExcel.read(testFile.toFile(), DateTargetReadDto.class);
+
+        assertThat(rows).hasSize(1);
+
+        DateTargetReadDto row = rows.get(0);
+        ZoneId zoneId = ZoneId.systemDefault();
+
+        assertThat(row.dateAsDate.toInstant().atZone(zoneId).toLocalDate()).isEqualTo(dateOnly);
+        assertThat(row.dateAsString).isEqualTo("2024-12-25");
+        assertThat(row.dateAsLocalDate).isEqualTo(dateOnly);
+        assertThat(row.dateTimeAsString).isEqualTo("2024-12-25T14:30:05");
+        assertThat(row.dateTimeAsDate.toInstant().atZone(zoneId).toLocalDateTime()).isEqualTo(dateTime);
+        assertThat(row.dateTimeAsLocalDateTime).isEqualTo(dateTime);
     }
 }

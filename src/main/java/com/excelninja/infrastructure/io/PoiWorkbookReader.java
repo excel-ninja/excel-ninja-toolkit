@@ -6,6 +6,7 @@ import com.excelninja.domain.model.ExcelWorkbook;
 import com.excelninja.domain.port.WorkbookReader;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.FormulaError;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
@@ -76,7 +77,9 @@ public class PoiWorkbookReader implements WorkbookReader {
                 rowValues.add(cellValue);
             }
 
-            dataRows.add(rowValues);
+            if (hasMeaningfulValues(rowValues)) {
+                dataRows.add(rowValues);
+            }
         }
 
         return ExcelSheet.builder()
@@ -103,12 +106,49 @@ public class PoiWorkbookReader implements WorkbookReader {
             case BOOLEAN:
                 return cell.getBooleanCellValue();
             case FORMULA:
-                return cell.getCellFormula();
+                return extractFormulaValue(cell);
             case BLANK:
                 return null;
             default:
                 return cell.toString();
         }
+    }
+
+    private Object extractFormulaValue(Cell cell) {
+        switch (cell.getCachedFormulaResultType()) {
+            case STRING:
+                String stringValue = cell.getStringCellValue();
+                return stringValue == null || stringValue.isEmpty() ? null : stringValue;
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getDateCellValue();
+                }
+                return cell.getNumericCellValue();
+            case BOOLEAN:
+                return cell.getBooleanCellValue();
+            case ERROR:
+                return FormulaError.forInt(cell.getErrorCellValue()).getString();
+            case BLANK:
+                return null;
+            default:
+                return cell.toString();
+        }
+    }
+
+    private boolean hasMeaningfulValues(List<Object> rowValues) {
+        return rowValues.stream().anyMatch(this::hasMeaningfulValue);
+    }
+
+    private boolean hasMeaningfulValue(Object value) {
+        if (value == null) {
+            return false;
+        }
+
+        if (value instanceof String) {
+            return !((String) value).trim().isEmpty();
+        }
+
+        return true;
     }
 
     /**

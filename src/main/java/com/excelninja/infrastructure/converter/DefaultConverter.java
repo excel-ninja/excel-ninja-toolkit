@@ -6,6 +6,8 @@ import com.excelninja.domain.exception.DocumentConversionException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Date;
@@ -17,6 +19,9 @@ import java.util.Date;
  * Multiple threads can safely use the same instance concurrently.
  */
 public class DefaultConverter implements ConverterPort {
+    private static final DateTimeFormatter ISO_LOCAL_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final DateTimeFormatter ISO_LOCAL_DATE_TIME_SECONDS_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
     @Override
     public Object convert(Object rawValue, Class<?> targetType) {
@@ -45,12 +50,16 @@ public class DefaultConverter implements ConverterPort {
                 return convertToLocalDateTime(rawValue);
             }
 
+            if (targetType == Date.class) {
+                return convertToDate(rawValue);
+            }
+
             if (targetType == BigDecimal.class) {
                 return convertToBigDecimal(rawValue);
             }
 
             if (targetType == String.class) {
-                return rawValue.toString();
+                return convertToString(rawValue);
             }
 
             throw new DocumentConversionException(String.format("Cannot convert value '%s' of type %s to %s", rawValue, rawValue.getClass().getSimpleName(), targetType.getSimpleName()));
@@ -123,7 +132,7 @@ public class DefaultConverter implements ConverterPort {
 
         if (value instanceof Date) {
             return ((Date) value).toInstant()
-                    .atZone(java.time.ZoneId.systemDefault())
+                    .atZone(ZoneId.systemDefault())
                     .toLocalDate();
         }
 
@@ -145,7 +154,7 @@ public class DefaultConverter implements ConverterPort {
 
         if (value instanceof Date) {
             return ((Date) value).toInstant()
-                    .atZone(java.time.ZoneId.systemDefault())
+                    .atZone(ZoneId.systemDefault())
                     .toLocalDateTime();
         }
 
@@ -158,6 +167,61 @@ public class DefaultConverter implements ConverterPort {
         }
 
         throw new DocumentConversionException(String.format("Cannot convert value '%s' of type %s to LocalDateTime", value, value.getClass().getSimpleName()));
+    }
+
+    private Date convertToDate(Object value) {
+        if (value instanceof Date) {
+            return (Date) value;
+        }
+
+        if (value instanceof LocalDate) {
+            return Date.from(((LocalDate) value).atStartOfDay(ZoneId.systemDefault()).toInstant());
+        }
+
+        if (value instanceof LocalDateTime) {
+            return Date.from(((LocalDateTime) value).atZone(ZoneId.systemDefault()).toInstant());
+        }
+
+        if (value instanceof String) {
+            String stringValue = (String) value;
+            try {
+                LocalDateTime localDateTime = parseLocalDateTimeFromString(stringValue);
+                return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+            } catch (DocumentConversionException ignored) {
+            }
+
+            try {
+                LocalDate localDate = parseLocalDateFromString(stringValue);
+                return Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+            } catch (DocumentConversionException ignored) {
+            }
+        }
+
+        throw new DocumentConversionException(String.format("Cannot convert value '%s' of type %s to Date", value, value.getClass().getSimpleName()));
+    }
+
+    private String convertToString(Object value) {
+        if (value instanceof Date) {
+            return formatDateTime(((Date) value).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
+        }
+
+        if (value instanceof LocalDate) {
+            return ((LocalDate) value).format(ISO_LOCAL_DATE_FORMATTER);
+        }
+
+        if (value instanceof LocalDateTime) {
+            return formatDateTime((LocalDateTime) value);
+        }
+
+        return value.toString();
+    }
+
+    private String formatDateTime(LocalDateTime localDateTime) {
+        if (localDateTime.toLocalTime().equals(LocalTime.MIDNIGHT)) {
+            return localDateTime.toLocalDate().format(ISO_LOCAL_DATE_FORMATTER);
+        }
+
+        return localDateTime.withNano(0).format(ISO_LOCAL_DATE_TIME_SECONDS_FORMATTER);
     }
 
     private BigDecimal convertToBigDecimal(Object value) {
