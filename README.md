@@ -76,6 +76,8 @@ Map<String, List<User>> allSheets = NinjaExcel.readAllSheets("users.xlsx", User.
 
 // Get sheet names
 List<String> sheetNames = NinjaExcel.getSheetNames("users.xlsx");
+
+// read(), readSheet(), readSheets(), getSheetNames() only parse the sheets they need.
 ```
 
 #### 3. Write DTO List to Excel
@@ -162,6 +164,14 @@ ExcelWorkbook workbook = ExcelWorkbook.builder()
     .sheet("Users", userList)
     .sheet("Products", productList)
     .metadata(new WorkbookMetadata()) // Optional metadata, persisted as workbook core properties
+    .build();
+
+// Auto-size is opt-in for write performance on large exports
+ExcelSheet sizedSheet = ExcelSheet.builder()
+    .name("Users")
+    .headers("Name")
+    .rows(Collections.singletonList(Collections.singletonList("Alice Johnson")))
+    .autoSizeColumns()
     .build();
 
 // Access workbook information

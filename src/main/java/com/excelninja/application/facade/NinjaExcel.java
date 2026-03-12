@@ -82,11 +82,10 @@ public final class NinjaExcel {
                 useStreaming ? "STREAMING" : "POI"));
 
         try {
-            if (useStreaming) {
-                return readWithStreaming(file, clazz);
-            } else {
-                return readWithPoi(file, clazz);
-            }
+            ExcelSheet sheet = useStreaming
+                    ? STREAMING_WORKBOOK_READER.readFirstSheet(file)
+                    : POI_WORKBOOK_READER.readFirstSheet(file);
+            return convertSheetToEntities(sheet, clazz);
         } catch (DocumentConversionException | EntityMappingException | HeaderMismatchException e) {
             throw e;
         } catch (Exception e) {
@@ -112,6 +111,7 @@ public final class NinjaExcel {
             Class<T> clazz
     ) {
         validateReadInputs(file, clazz);
+        String normalizedSheetName = validateSheetName(sheetName);
 
         long startTime = System.currentTimeMillis();
         String fileName = file.getName();
@@ -119,17 +119,17 @@ public final class NinjaExcel {
         boolean useStreaming = shouldUseStreaming(fileSize);
 
         logger.info(String.format("[NINJA-EXCEL] Reading sheet '%s' from Excel file: %s (%.2f MB) using %s reader [Cache size: %d]",
-                sheetName, fileName, fileSize / (1024.0 * 1024.0),
+                normalizedSheetName, fileName, fileSize / (1024.0 * 1024.0),
                 useStreaming ? "STREAMING" : "POI",
                 EntityMetadata.getCacheSize()));
 
         try {
-            WorkbookReader reader = useStreaming ? STREAMING_WORKBOOK_READER : POI_WORKBOOK_READER;
-            ExcelWorkbook workbook = reader.read(file);
-            ExcelSheet sheet = workbook.getSheet(sheetName);
+            ExcelSheet sheet = useStreaming
+                    ? STREAMING_WORKBOOK_READER.readSheet(file, normalizedSheetName)
+                    : POI_WORKBOOK_READER.readSheet(file, normalizedSheetName);
 
             if (sheet == null) {
-                throw new DocumentConversionException("Sheet not found: " + sheetName);
+                throw new DocumentConversionException("Sheet not found: " + normalizedSheetName);
             }
 
             List<T> result = convertSheetToEntities(sheet, clazz);
@@ -138,7 +138,7 @@ public final class NinjaExcel {
             double recordsPerSecond = calculateRecordsPerSecond(result.size(), duration);
 
             logger.info(String.format("[NINJA-EXCEL] Successfully read %d records from sheet '%s' in %s in %d ms (%.2f records/sec) using %s [Cache size: %d]",
-                    result.size(), sheetName, fileName, duration, recordsPerSecond,
+                    result.size(), normalizedSheetName, fileName, duration, recordsPerSecond,
                     useStreaming ? "STREAMING" : "POI", EntityMetadata.getCacheSize()));
 
             return result;
@@ -257,6 +257,10 @@ public final class NinjaExcel {
             List<String> sheetNames
     ) {
         validateReadInputs(file, clazz);
+        List<String> normalizedSheetNames = validateSheetNames(sheetNames);
+        if (normalizedSheetNames.isEmpty()) {
+            return Collections.emptyMap();
+        }
 
         long startTime = System.currentTimeMillis();
         String fileName = file.getName();
@@ -264,20 +268,19 @@ public final class NinjaExcel {
         boolean useStreaming = shouldUseStreaming(fileSize);
 
         logger.info(String.format("[NINJA-EXCEL] Reading specified sheets %s from Excel file: %s (%.2f MB) using %s reader [Cache size: %d]",
-                sheetNames, fileName, fileSize / (1024.0 * 1024.0),
+                normalizedSheetNames, fileName, fileSize / (1024.0 * 1024.0),
                 useStreaming ? "STREAMING" : "POI",
                 EntityMetadata.getCacheSize()));
 
         try {
-            WorkbookReader reader = useStreaming ? STREAMING_WORKBOOK_READER : POI_WORKBOOK_READER;
-            ExcelWorkbook workbook = reader.read(file);
             Map<String, List<T>> result = new LinkedHashMap<>();
 
-            for (String sheetName : sheetNames) {
-                ExcelSheet sheet = workbook.getSheet(sheetName);
-                if (sheet != null) {
-                    result.put(sheetName, convertSheetToEntities(sheet, clazz));
-                }
+            List<ExcelSheet> selectedSheets = useStreaming
+                    ? STREAMING_WORKBOOK_READER.readSheets(file, normalizedSheetNames)
+                    : POI_WORKBOOK_READER.readSheets(file, normalizedSheetNames);
+
+            for (ExcelSheet sheet : selectedSheets) {
+                result.put(sheet.getName().getValue(), convertSheetToEntities(sheet, clazz));
             }
 
             long duration = System.currentTimeMillis() - startTime;
@@ -305,10 +308,9 @@ public final class NinjaExcel {
         try {
             long fileSize = file.length();
             boolean useStreaming = shouldUseStreaming(fileSize);
-            WorkbookReader reader = useStreaming ? STREAMING_WORKBOOK_READER : POI_WORKBOOK_READER;
-
-            ExcelWorkbook workbook = reader.read(file);
-            return new ArrayList<>(workbook.getSheetNames());
+            return useStreaming
+                    ? STREAMING_WORKBOOK_READER.getSheetNames(file)
+                    : POI_WORKBOOK_READER.getSheetNames(file);
         } catch (IOException e) {
             throw new DocumentConversionException("Failed to read Excel file: " + file.getName(), e);
         }
@@ -407,26 +409,6 @@ public final class NinjaExcel {
         return useStreaming;
     }
 
-    private static <T> List<T> readWithPoi(
-            File file,
-            Class<T> clazz
-    ) throws IOException {
-        ExcelWorkbook workbook = POI_WORKBOOK_READER.read(file);
-        String firstSheetName = workbook.getSheetNames().iterator().next();
-        ExcelSheet sheet = workbook.getSheet(firstSheetName);
-        return convertSheetToEntities(sheet, clazz);
-    }
-
-    private static <T> List<T> readWithStreaming(
-            File file,
-            Class<T> clazz
-    ) throws IOException {
-        ExcelWorkbook workbook = STREAMING_WORKBOOK_READER.read(file);
-        String firstSheetName = workbook.getSheetNames().iterator().next();
-        ExcelSheet sheet = workbook.getSheet(firstSheetName);
-        return convertSheetToEntities(sheet, clazz);
-    }
-
     private static <T> List<T> convertSheetToEntities(
             ExcelSheet sheet,
             Class<T> entityType
@@ -515,6 +497,27 @@ public final class NinjaExcel {
         }
 
         return new File(filePath.trim());
+    }
+
+    private static String validateSheetName(String sheetName) {
+        if (sheetName == null || sheetName.trim().isEmpty()) {
+            throw new DocumentConversionException("Sheet name cannot be null or empty");
+        }
+
+        return sheetName.trim();
+    }
+
+    private static List<String> validateSheetNames(List<String> sheetNames) {
+        if (sheetNames == null) {
+            throw new DocumentConversionException("Sheet names cannot be null");
+        }
+
+        List<String> normalizedSheetNames = new ArrayList<>(sheetNames.size());
+        for (String sheetName : sheetNames) {
+            normalizedSheetNames.add(validateSheetName(sheetName));
+        }
+
+        return normalizedSheetNames;
     }
 
     private static double calculateRecordsPerSecond(

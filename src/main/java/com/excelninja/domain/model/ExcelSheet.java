@@ -153,6 +153,15 @@ public class ExcelSheet {
             return this;
         }
 
+        public SheetBuilder autoSizeColumns() {
+            return autoSizeColumns(true);
+        }
+
+        public SheetBuilder autoSizeColumns(boolean enabled) {
+            this.metadata = this.metadata.withAutoSizeColumns(enabled);
+            return this;
+        }
+
         public SheetBuilder columnWidth(
                 int columnIndex,
                 int width

@@ -197,6 +197,44 @@ class ExcelReaderTest {
         private Boolean active;
     }
 
+    public static class NumericStringWriteDto {
+        @ExcelWriteColumn(headerName = "Value", order = 1)
+        private final Double value;
+
+        public NumericStringWriteDto(Double value) {
+            this.value = value;
+        }
+    }
+
+    public static class NumericStringReadDto {
+        @ExcelReadColumn(headerName = "Value")
+        private String value;
+    }
+
+    public static class EmptyStringWriteDto {
+        @ExcelWriteColumn(headerName = "ExplicitEmpty", order = 1)
+        private final String explicitEmpty;
+
+        @ExcelWriteColumn(headerName = "BlankCell", order = 2)
+        private final String blankCell;
+
+        public EmptyStringWriteDto(
+                String explicitEmpty,
+                String blankCell
+        ) {
+            this.explicitEmpty = explicitEmpty;
+            this.blankCell = blankCell;
+        }
+    }
+
+    public static class EmptyStringReadDto {
+        @ExcelReadColumn(headerName = "ExplicitEmpty", defaultValue = "fallback")
+        private String explicitEmpty;
+
+        @ExcelReadColumn(headerName = "BlankCell", defaultValue = "fallback")
+        private String blankCell;
+    }
+
     @Test
     @DisplayName("엑셀 파일에서 유효한 데이터 쓰고 읽기")
     void readValidExcelFile() {
@@ -371,5 +409,54 @@ class ExcelReaderTest {
         assertThat(row.age).isEqualTo(42);
         assertThat(row.salary).isEqualTo(0.5d);
         assertThat(row.active).isEqualTo(true);
+    }
+
+    @Test
+    @DisplayName("Numeric cells map to the same String values across POI and streaming readers")
+    void numericCellsMapToConsistentStringsAcrossReaders() {
+        long originalThreshold = NinjaExcel.getStreamingThreshold();
+        List<NumericStringWriteDto> testData = Arrays.asList(
+                new NumericStringWriteDto(1.0),
+                new NumericStringWriteDto(1.5)
+        );
+
+        Path testFile = tempDir.resolve("numeric_string_consistency.xlsx");
+        ExcelWorkbook workbook = ExcelWorkbook.builder().sheet(testData).build();
+        NinjaExcel.write(workbook, testFile.toString());
+
+        try {
+            NinjaExcel.setStreamingThreshold(Long.MAX_VALUE);
+            List<NumericStringReadDto> poiRows = NinjaExcel.read(testFile.toFile(), NumericStringReadDto.class);
+
+            NinjaExcel.setStreamingThreshold(1);
+            List<NumericStringReadDto> streamingRows = NinjaExcel.read(testFile.toFile(), NumericStringReadDto.class);
+
+            assertThat(poiRows).hasSize(2);
+            assertThat(streamingRows).hasSize(2);
+            assertThat(poiRows.get(0).value).isEqualTo("1");
+            assertThat(poiRows.get(1).value).isEqualTo("1.5");
+            assertThat(streamingRows.get(0).value).isEqualTo("1");
+            assertThat(streamingRows.get(1).value).isEqualTo("1.5");
+        } finally {
+            NinjaExcel.setStreamingThreshold(originalThreshold);
+        }
+    }
+
+    @Test
+    @DisplayName("Explicit empty strings round-trip without being collapsed to null or default values")
+    void explicitEmptyStringsArePreservedForStringTargets() {
+        List<EmptyStringWriteDto> testData = Collections.singletonList(
+                new EmptyStringWriteDto("", null)
+        );
+
+        Path testFile = tempDir.resolve("explicit_empty_strings.xlsx");
+        ExcelWorkbook workbook = ExcelWorkbook.builder().sheet(testData).build();
+        NinjaExcel.write(workbook, testFile.toString());
+
+        List<EmptyStringReadDto> rows = NinjaExcel.read(testFile.toFile(), EmptyStringReadDto.class);
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).explicitEmpty).isEqualTo("");
+        assertThat(rows.get(0).blankCell).isEqualTo("fallback");
     }
 }

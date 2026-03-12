@@ -141,7 +141,8 @@ public class StreamingWorkbookReader implements WorkbookReader {
         }
 
         if (value instanceof String) {
-            return !((String) value).trim().isEmpty();
+            String stringValue = (String) value;
+            return stringValue.isEmpty() || !stringValue.trim().isEmpty();
         }
 
         return true;
@@ -161,6 +162,180 @@ public class StreamingWorkbookReader implements WorkbookReader {
             int chunkSize
     ) {
         return new ChunkIterator<>(inputStream, entityType, chunkSize, false);
+    }
+
+    public ExcelSheet readFirstSheet(File excelFile) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile)) {
+            return readFirstSheet(fileInputStream);
+        }
+    }
+
+    public ExcelSheet readFirstSheet(InputStream inputStream) throws IOException {
+        validateInputStream(inputStream);
+
+        OPCPackage opcPackage = null;
+        try {
+            opcPackage = OPCPackage.open(inputStream);
+            Map<String, ExcelSheet> sheets = readSelectedSheetsFromPackage(opcPackage, null, true);
+            if (sheets.isEmpty()) {
+                throw new InvalidDocumentStructureException("No sheets found in workbook");
+            }
+            return sheets.values().iterator().next();
+        } catch (DocumentConversionException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new DocumentConversionException("Failed to read first sheet with streaming reader", e);
+        } finally {
+            closePackage(opcPackage);
+        }
+    }
+
+    public ExcelSheet readSheet(
+            File excelFile,
+            String sheetName
+    ) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile)) {
+            return readSheet(fileInputStream, sheetName);
+        }
+    }
+
+    public ExcelSheet readSheet(
+            InputStream inputStream,
+            String sheetName
+    ) throws IOException {
+        validateInputStream(inputStream);
+
+        OPCPackage opcPackage = null;
+        try {
+            opcPackage = OPCPackage.open(inputStream);
+            return readSelectedSheetsFromPackage(opcPackage, Collections.singletonList(sheetName), false).get(sheetName);
+        } catch (DocumentConversionException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new DocumentConversionException("Failed to read sheet '" + sheetName + "' with streaming reader", e);
+        } finally {
+            closePackage(opcPackage);
+        }
+    }
+
+    public List<ExcelSheet> readSheets(
+            File excelFile,
+            List<String> requestedSheetNames
+    ) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile)) {
+            return readSheets(fileInputStream, requestedSheetNames);
+        }
+    }
+
+    public List<ExcelSheet> readSheets(
+            InputStream inputStream,
+            List<String> requestedSheetNames
+    ) throws IOException {
+        validateInputStream(inputStream);
+
+        OPCPackage opcPackage = null;
+        try {
+            opcPackage = OPCPackage.open(inputStream);
+            return new ArrayList<>(readSelectedSheetsFromPackage(opcPackage, requestedSheetNames, false).values());
+        } catch (DocumentConversionException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new DocumentConversionException("Failed to read selected sheets with streaming reader", e);
+        } finally {
+            closePackage(opcPackage);
+        }
+    }
+
+    public List<String> getSheetNames(File excelFile) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile)) {
+            return getSheetNames(fileInputStream);
+        }
+    }
+
+    public List<String> getSheetNames(InputStream inputStream) throws IOException {
+        validateInputStream(inputStream);
+
+        OPCPackage opcPackage = null;
+        try {
+            opcPackage = OPCPackage.open(inputStream);
+            XSSFReader xssfReader = new XSSFReader(opcPackage);
+            XSSFReader.SheetIterator sheetIterator = (XSSFReader.SheetIterator) xssfReader.getSheetsData();
+            List<String> sheetNames = new ArrayList<>();
+
+            while (sheetIterator.hasNext()) {
+                try (InputStream ignored = sheetIterator.next()) {
+                    sheetNames.add(sheetIterator.getSheetName());
+                }
+            }
+
+            return sheetNames;
+        } catch (DocumentConversionException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new DocumentConversionException("Failed to read sheet names with streaming reader", e);
+        } finally {
+            closePackage(opcPackage);
+        }
+    }
+
+    private Map<String, ExcelSheet> readSelectedSheetsFromPackage(
+            OPCPackage opcPackage,
+            List<String> requestedSheetNames,
+            boolean firstOnly
+    ) throws Exception {
+        XSSFReader xssfReader = new XSSFReader(opcPackage);
+        SharedStringsTable sharedStringsTable = (SharedStringsTable) xssfReader.getSharedStringsTable();
+        StylesTable stylesTable = xssfReader.getStylesTable();
+        XSSFReader.SheetIterator sheetIterator = (XSSFReader.SheetIterator) xssfReader.getSheetsData();
+        LinkedHashSet<String> requested = requestedSheetNames != null ? new LinkedHashSet<>(requestedSheetNames) : null;
+        Map<String, ExcelSheet> parsedSheets = new HashMap<>();
+
+        while (sheetIterator.hasNext()) {
+            try (InputStream sheetStream = sheetIterator.next()) {
+                String currentSheetName = sheetIterator.getSheetName();
+                if (firstOnly || (requested != null && requested.contains(currentSheetName))) {
+                    ExcelSheet sheet = readSheetWithStreaming(sheetStream, currentSheetName, sharedStringsTable, stylesTable);
+                    parsedSheets.put(currentSheetName, sheet);
+
+                    if (firstOnly) {
+                        break;
+                    }
+
+                    if (requested != null && parsedSheets.size() == requested.size()) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (requested == null) {
+            return parsedSheets;
+        }
+
+        Map<String, ExcelSheet> orderedSheets = new LinkedHashMap<>();
+        for (String sheetName : requestedSheetNames) {
+            ExcelSheet sheet = parsedSheets.get(sheetName);
+            if (sheet != null) {
+                orderedSheets.put(sheetName, sheet);
+            }
+        }
+        return orderedSheets;
+    }
+
+    private void validateInputStream(InputStream inputStream) {
+        if (inputStream == null) {
+            throw new DocumentConversionException("InputStream cannot be null");
+        }
+    }
+
+    private void closePackage(OPCPackage opcPackage) {
+        if (opcPackage != null) {
+            try {
+                opcPackage.close();
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "[NINJA-EXCEL] Error closing OPCPackage", e);
+            }
+        }
     }
 
     private static class BaseSheetHandler extends DefaultHandler {
@@ -274,8 +449,10 @@ public class StreamingWorkbookReader implements WorkbookReader {
     }
 
     private static class ChunkIterator<T> implements ChunkReader<T> {
+        private static final int MAX_QUEUED_CHUNKS = 2;
+
         private final int chunkSize;
-        private final BlockingQueue<Object> queue = new LinkedBlockingQueue<>(20000); // Buffer size
+        private final BlockingQueue<Object> queue = new LinkedBlockingQueue<>(MAX_QUEUED_CHUNKS);
         private final InputStream managedInputStream;
         private final boolean closeOnFinish;
         private final Thread producerThread;
@@ -305,11 +482,13 @@ public class StreamingWorkbookReader implements WorkbookReader {
                     StylesTable styles = xssfReader.getStylesTable();
 
                     XMLReader xmlReader = XMLHelper.newXMLReader();
-                    xmlReader.setContentHandler(new ChunkingHandler(entityType, sst, styles));
+                    ChunkingHandler chunkingHandler = new ChunkingHandler(entityType, sst, styles);
+                    xmlReader.setContentHandler(chunkingHandler);
 
                     try (InputStream sheetStream = xssfReader.getSheetsData().next()) {
                         xmlReader.parse(new InputSource(sheetStream));
                     }
+                    chunkingHandler.finish();
                 } catch (Exception e) {
                     producerException = e;
                 } finally {
@@ -363,26 +542,32 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 return;
             }
 
-            nextChunk = new ArrayList<>(chunkSize);
-            while (nextChunk.size() < chunkSize) {
-                try {
-                    Object item = queue.poll(); // Non-blocking poll
-                    if (item == null) { // Queue is empty, but producer may not be finished
-                        if (isProducerFinished && queue.isEmpty()) break;
-                        item = queue.take(); // Block until an item is available
+            try {
+                Object item = queue.poll();
+                if (item == null) {
+                    if (isProducerFinished && queue.isEmpty()) {
+                        nextChunk = Collections.emptyList();
+                        return;
                     }
-
-                    if (item == END_OF_QUEUE) {
-                        isProducerFinished = true;
-                        queue.offer(END_OF_QUEUE); // Put it back for other consumers if any
-                        break;
-                    }
-                    nextChunk.add((T) item);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new DocumentConversionException("Iterator thread interrupted", e);
+                    item = queue.take();
                 }
+
+                if (item == END_OF_QUEUE) {
+                    isProducerFinished = true;
+                    nextChunk = Collections.emptyList();
+                    return;
+                }
+
+                nextChunk = castChunk(item);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new DocumentConversionException("Iterator thread interrupted", e);
             }
+        }
+
+        @SuppressWarnings("unchecked")
+        private List<T> castChunk(Object item) {
+            return (List<T>) item;
         }
 
         @Override
@@ -425,6 +610,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
             private boolean isHeaderProcessed = false;
             private List<Integer> fieldToColumnMapping;
             private int maxColCount = 0;
+            private List<T> bufferedChunk = new ArrayList<>(chunkSize);
 
             public ChunkingHandler(
                     Class<T> entityType,
@@ -449,22 +635,9 @@ public class StreamingWorkbookReader implements WorkbookReader {
                     isHeaderProcessed = true;
                 } else {
                     if (hasMeaningfulValues(rowValues)) {
-                        T entity;
-                        try {
-                            entity = convertRowToEntity(rowValues);
-                        } catch (Exception e) {
-                            throw e instanceof DocumentConversionException
-                                    ? (DocumentConversionException) e
-                                    : new DocumentConversionException("Failed to process chunk row " + currentRowNumber, e);
-                        }
-                        try {
-                            queue.put(entity);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new DocumentConversionException(
-                                    "Chunk queue interrupted while processing row " + currentRowNumber,
-                                    e
-                            );
+                        bufferedChunk.add(convertRowToEntity(rowValues));
+                        if (bufferedChunk.size() == chunkSize) {
+                            publishBufferedChunk();
                         }
                     }
                 }
@@ -482,7 +655,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 }
             }
 
-            private T convertRowToEntity(List<Object> rowValues) throws Exception {
+            private T convertRowToEntity(List<Object> rowValues) {
                 try {
                     T entity = entityMetadata.createInstance();
                     List<FieldMapping> fieldMappings = entityMetadata.getReadFieldMappings();
@@ -496,6 +669,27 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 } catch (Exception e) {
                     throw new DocumentConversionException(
                             "Failed to convert chunk row " + currentRowNumber + " to entity " + entityMetadata,
+                            e
+                    );
+                }
+            }
+
+            private void finish() {
+                if (!bufferedChunk.isEmpty()) {
+                    publishBufferedChunk();
+                }
+            }
+
+            private void publishBufferedChunk() {
+                List<T> chunkToPublish = bufferedChunk;
+                bufferedChunk = new ArrayList<>(chunkSize);
+
+                try {
+                    queue.put(chunkToPublish);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new DocumentConversionException(
+                            "Chunk queue interrupted while publishing buffered rows",
                             e
                     );
                 }
@@ -524,8 +718,14 @@ public class StreamingWorkbookReader implements WorkbookReader {
             SharedStringsTable sst,
             StylesTable styles
     ) {
-        if (value == null || value.isEmpty()) return null;
         String cellType = (type != null) ? type : "";
+        if (value == null) return null;
+        if (value.isEmpty()) {
+            if ("inlineStr".equals(cellType)) {
+                return "";
+            }
+            return null;
+        }
         try {
             switch (cellType) {
                 case "s":

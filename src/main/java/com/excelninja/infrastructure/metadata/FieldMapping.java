@@ -78,8 +78,15 @@ public final class FieldMapping {
     }
 
     private Object normalizeValue(Object value) {
-        if (value instanceof String && ((String) value).trim().isEmpty()) {
-            return null;
+        if (value instanceof String) {
+            String stringValue = (String) value;
+            if (targetType == String.class) {
+                return stringValue;
+            }
+
+            if (stringValue.trim().isEmpty()) {
+                return null;
+            }
         }
 
         return value;

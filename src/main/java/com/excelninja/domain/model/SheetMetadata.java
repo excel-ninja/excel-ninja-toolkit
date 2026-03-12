@@ -10,7 +10,7 @@ public class SheetMetadata {
     private final boolean autoSizeColumns;
 
     public SheetMetadata() {
-        this(new HashMap<>(), new HashMap<>(), true);
+        this(new HashMap<>(), new HashMap<>(), false);
     }
 
     public SheetMetadata(
@@ -51,5 +51,9 @@ public class SheetMetadata {
         Map<Integer, Short> newRowHeights = new HashMap<>(this.rowHeights);
         newRowHeights.put(rowIndex, height);
         return new SheetMetadata(columnWidths, newRowHeights, autoSizeColumns);
+    }
+
+    public SheetMetadata withAutoSizeColumns(boolean enabled) {
+        return new SheetMetadata(columnWidths, rowHeights, enabled);
     }
 }

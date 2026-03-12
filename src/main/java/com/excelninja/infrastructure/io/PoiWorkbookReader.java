@@ -55,6 +55,59 @@ public class PoiWorkbookReader implements WorkbookReader {
         }
     }
 
+    public ExcelSheet readFirstSheet(File excelFile) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile);
+             XSSFWorkbook workbook = new XSSFWorkbook(fileInputStream)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                throw new InvalidDocumentStructureException("No sheets found in workbook");
+            }
+
+            return readSheetFromPOI(workbook.getSheetAt(0));
+        }
+    }
+
+    public ExcelSheet readSheet(
+            File excelFile,
+            String sheetName
+    ) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile);
+             XSSFWorkbook workbook = new XSSFWorkbook(fileInputStream)) {
+            org.apache.poi.ss.usermodel.Sheet poiSheet = workbook.getSheet(sheetName);
+            if (poiSheet == null) {
+                return null;
+            }
+            return readSheetFromPOI(poiSheet);
+        }
+    }
+
+    public List<String> getSheetNames(File excelFile) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile);
+             XSSFWorkbook workbook = new XSSFWorkbook(fileInputStream)) {
+            List<String> sheetNames = new ArrayList<>(workbook.getNumberOfSheets());
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                sheetNames.add(workbook.getSheetName(i));
+            }
+            return sheetNames;
+        }
+    }
+
+    public List<ExcelSheet> readSheets(
+            File excelFile,
+            List<String> requestedSheetNames
+    ) throws IOException {
+        try (FileInputStream fileInputStream = new FileInputStream(excelFile);
+             XSSFWorkbook workbook = new XSSFWorkbook(fileInputStream)) {
+            List<ExcelSheet> sheets = new ArrayList<>();
+            for (String sheetName : requestedSheetNames) {
+                org.apache.poi.ss.usermodel.Sheet poiSheet = workbook.getSheet(sheetName);
+                if (poiSheet != null) {
+                    sheets.add(readSheetFromPOI(poiSheet));
+                }
+            }
+            return sheets;
+        }
+    }
+
     private ExcelSheet readSheetFromPOI(org.apache.poi.ss.usermodel.Sheet poiSheet) {
         String sheetName = poiSheet.getSheetName();
         Iterator<Row> rowIterator = poiSheet.iterator();
@@ -158,7 +211,8 @@ public class PoiWorkbookReader implements WorkbookReader {
         }
 
         if (value instanceof String) {
-            return !((String) value).trim().isEmpty();
+            String stringValue = (String) value;
+            return stringValue.isEmpty() || !stringValue.trim().isEmpty();
         }
 
         return true;

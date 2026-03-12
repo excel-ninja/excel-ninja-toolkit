@@ -95,6 +95,20 @@ class DomainExceptionTest {
     }
 
     @Test
+    @DisplayName("readSheets는 null/blank sheet name 입력을 일관되게 거부")
+    void readSheetsValidatesRequestedSheetNames() throws IOException {
+        File validExcel = createValidExcelFile();
+
+        assertThatThrownBy(() -> NinjaExcel.readSheets(validExcel, ValidReadDto.class, null))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("Sheet names cannot be null");
+
+        assertThatThrownBy(() -> NinjaExcel.readSheets(validExcel, ValidReadDto.class, Collections.singletonList(" ")))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("Sheet name cannot be null or empty");
+    }
+
+    @Test
     @DisplayName("어노테이션이 없는 클래스 사용 시 EntityMappingException 발생")
     void readWithoutAnnotation() throws IOException {
         File validExcel = createValidExcelFile();

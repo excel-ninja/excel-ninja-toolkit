@@ -9,12 +9,14 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -362,6 +364,62 @@ class MultiSheetExcelTest {
         assertThat(q1Data.get("January").get(0).getName()).isEqualTo("Jan User");
         assertThat(q1Data.get("February").get(0).getName()).isEqualTo("Feb User");
         assertThat(q1Data.get("March").get(0).getName()).isEqualTo("Mar User");
+    }
+
+    @Test
+    @DisplayName("대상 시트만 읽는 API는 깨진 비대상 시트를 파싱하지 않는다")
+    void targetedSheetApisSkipInvalidUnrequestedSheets() throws Exception {
+        Path testFile = tempDir.resolve("partial_sheet_access.xlsx");
+        long originalThreshold = NinjaExcel.getStreamingThreshold();
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet usersSheet = workbook.createSheet("Users");
+            Row usersHeader = usersSheet.createRow(0);
+            usersHeader.createCell(0).setCellValue("ID");
+            usersHeader.createCell(1).setCellValue("Name");
+            usersHeader.createCell(2).setCellValue("Age");
+            usersHeader.createCell(3).setCellValue("Email");
+
+            Row usersRow = usersSheet.createRow(1);
+            usersRow.createCell(0).setCellValue(1);
+            usersRow.createCell(1).setCellValue("Alice");
+            usersRow.createCell(2).setCellValue(30);
+            usersRow.createCell(3).setCellValue("alice@example.com");
+
+            Sheet brokenSheet = workbook.createSheet("Broken");
+            Row brokenHeader = brokenSheet.createRow(0);
+            brokenHeader.createCell(0).setCellValue("ID");
+            brokenHeader.createCell(2).setCellValue("Name");
+
+            try (OutputStream outputStream = java.nio.file.Files.newOutputStream(testFile)) {
+                workbook.write(outputStream);
+            }
+        }
+
+        try {
+            for (long threshold : new long[]{Long.MAX_VALUE, 1L}) {
+                NinjaExcel.setStreamingThreshold(threshold);
+
+                List<UserDto> firstSheetRows = NinjaExcel.read(testFile.toFile(), UserDto.class);
+                List<UserDto> namedRows = NinjaExcel.readSheet(testFile.toFile(), "Users", UserDto.class);
+                Map<String, List<UserDto>> selectedRows = NinjaExcel.readSheets(
+                        testFile.toFile(),
+                        UserDto.class,
+                        Collections.singletonList("Users")
+                );
+                List<String> sheetNames = NinjaExcel.getSheetNames(testFile.toFile());
+
+                assertThat(firstSheetRows).hasSize(1);
+                assertThat(firstSheetRows.get(0).getName()).isEqualTo("Alice");
+                assertThat(namedRows).hasSize(1);
+                assertThat(namedRows.get(0).getEmail()).isEqualTo("alice@example.com");
+                assertThat(selectedRows).containsOnlyKeys("Users");
+                assertThat(selectedRows.get("Users")).hasSize(1);
+                assertThat(sheetNames).containsExactly("Users", "Broken");
+            }
+        } finally {
+            NinjaExcel.setStreamingThreshold(originalThreshold);
+        }
     }
 
     @Test

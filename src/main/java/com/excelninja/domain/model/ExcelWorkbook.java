@@ -60,12 +60,34 @@ public class ExcelWorkbook {
             return sheet(name, ExcelSheet.fromEntities(entities, name));
         }
 
+        public <T> WorkbookBuilder sheet(
+                String name,
+                List<T> entities,
+                SheetMetadata metadata
+        ) {
+            if (entities == null || entities.isEmpty()) {
+                throw new EntityMappingException(Object.class, "Entity list cannot be null or empty");
+            }
+            return sheet(name, ExcelSheet.fromEntities(entities, name, metadata));
+        }
+
         public <T> WorkbookBuilder sheet(List<T> entities) {
             if (entities == null || entities.isEmpty()) {
                 throw new EntityMappingException(Object.class, "Entity list cannot be null or empty");
             }
             String sheetName = entities.get(0).getClass().getSimpleName();
             return sheet(sheetName, ExcelSheet.fromEntities(entities, sheetName));
+        }
+
+        public <T> WorkbookBuilder sheet(
+                List<T> entities,
+                SheetMetadata metadata
+        ) {
+            if (entities == null || entities.isEmpty()) {
+                throw new EntityMappingException(Object.class, "Entity list cannot be null or empty");
+            }
+            String sheetName = entities.get(0).getClass().getSimpleName();
+            return sheet(sheetName, ExcelSheet.fromEntities(entities, sheetName, metadata));
         }
 
         public WorkbookBuilder metadata(WorkbookMetadata metadata) {

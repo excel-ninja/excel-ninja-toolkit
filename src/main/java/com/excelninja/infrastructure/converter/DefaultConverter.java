@@ -282,6 +282,10 @@ public class DefaultConverter implements ConverterPort {
     }
 
     private String convertToString(Object value) {
+        if (value instanceof Number) {
+            return formatNumber((Number) value);
+        }
+
         if (value instanceof Date) {
             return formatDateTime(((Date) value).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
         }
@@ -295,6 +299,23 @@ public class DefaultConverter implements ConverterPort {
         }
 
         return value.toString();
+    }
+
+    private String formatNumber(Number number) {
+        if (number instanceof Byte || number instanceof Short || number instanceof Integer || number instanceof Long) {
+            return String.valueOf(number.longValue());
+        }
+
+        if (number instanceof BigDecimal) {
+            return ((BigDecimal) number).stripTrailingZeros().toPlainString();
+        }
+
+        double doubleValue = number.doubleValue();
+        if (Double.isNaN(doubleValue) || Double.isInfinite(doubleValue)) {
+            return number.toString();
+        }
+
+        return BigDecimal.valueOf(doubleValue).stripTrailingZeros().toPlainString();
     }
 
     private String formatDateTime(LocalDateTime localDateTime) {

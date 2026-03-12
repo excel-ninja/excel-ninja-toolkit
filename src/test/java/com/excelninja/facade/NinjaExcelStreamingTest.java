@@ -13,8 +13,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.*;
@@ -475,6 +477,19 @@ class NinjaExcelStreamingTest {
             }
 
             assertThat(processed).isEqualTo(1000);
+        }
+
+        @Test
+        @DisplayName("청크 리더는 소수의 청크만 버퍼링해 메모리 상한을 낮춘다")
+        void shouldBufferOnlySmallNumberOfChunks() throws Exception {
+            try (ChunkReader<Employee> chunks = NinjaExcel.readInChunks(largeFile, Employee.class, 7)) {
+                Field queueField = chunks.getClass().getDeclaredField("queue");
+                queueField.setAccessible(true);
+                BlockingQueue<?> queue = (BlockingQueue<?>) queueField.get(chunks);
+
+                int capacity = queue.size() + queue.remainingCapacity();
+                assertThat(capacity).isLessThanOrEqualTo(2);
+            }
         }
     }
 

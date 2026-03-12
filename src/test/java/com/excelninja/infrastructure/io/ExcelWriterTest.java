@@ -3,7 +3,9 @@ package com.excelninja.infrastructure.io;
 import com.excelninja.application.facade.NinjaExcel;
 import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
+import com.excelninja.domain.model.ExcelSheet;
 import com.excelninja.domain.model.ExcelWorkbook;
+import com.excelninja.domain.model.SheetMetadata;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -355,6 +357,40 @@ class ExcelWriterTest {
             assertEquals("First", headerRow.getCell(0).getStringCellValue());
             assertEquals("Second", headerRow.getCell(1).getStringCellValue());
             assertEquals("Third", headerRow.getCell(2).getStringCellValue());
+        }
+    }
+
+    @Test
+    @DisplayName("자동 컬럼 너비 조정은 기본 비활성화이며 opt-in 시에만 적용된다")
+    void autoSizeColumnsIsOptIn() throws Exception {
+        ExcelSheet disabledSheet = ExcelSheet.builder()
+                .name("Disabled")
+                .headers("Value")
+                .rows(Collections.singletonList(Collections.singletonList("A very long value that should widen the column")))
+                .build();
+
+        ExcelSheet enabledSheet = ExcelSheet.builder()
+                .name("Enabled")
+                .headers("Value")
+                .rows(Collections.singletonList(Collections.singletonList("A very long value that should widen the column")))
+                .autoSizeColumns()
+                .build();
+
+        assertFalse(new SheetMetadata().isAutoSizeColumns());
+        assertFalse(disabledSheet.getMetadata().isAutoSizeColumns());
+        assertTrue(enabledSheet.getMetadata().isAutoSizeColumns());
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("Disabled", disabledSheet)
+                .sheet("Enabled", enabledSheet)
+                .build();
+        NinjaExcel.write(workbook, outputStream);
+
+        try (Workbook poiWorkbook = WorkbookFactory.create(new ByteArrayInputStream(outputStream.toByteArray()))) {
+            int disabledWidth = poiWorkbook.getSheet("Disabled").getColumnWidth(0);
+            int enabledWidth = poiWorkbook.getSheet("Enabled").getColumnWidth(0);
+            assertTrue(enabledWidth > disabledWidth);
         }
     }
 }
