@@ -140,6 +140,16 @@ class DomainExceptionTest {
                 .hasMessageContaining("duplicate");
     }
 
+    @Test
+    @DisplayName("read() preserves row-level conversion details")
+    void readPreservesDetailedConversionContext() throws IOException {
+        File invalidExcel = createInvalidTypedExcelFile();
+
+        assertThatThrownBy(() -> NinjaExcel.read(invalidExcel, InvalidAgeReadDto.class))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("for row 1");
+    }
+
     public static class ValidReadDto {
         @ExcelReadColumn(headerName = "Name")
         private String name;
@@ -160,6 +170,16 @@ class DomainExceptionTest {
         private String name;
 
         public NoAnnotationDto() {}
+    }
+
+    public static class InvalidAgeReadDto {
+        @ExcelReadColumn(headerName = "Name")
+        private String name;
+
+        @ExcelReadColumn(headerName = "Age")
+        private Integer age;
+
+        public InvalidAgeReadDto() {}
     }
 
     public static class DuplicateHeaderDto {
@@ -212,6 +232,23 @@ class DomainExceptionTest {
             }
         }
 
+        return filePath.toFile();
+    }
+
+    private File createInvalidTypedExcelFile() throws IOException {
+        Path filePath = tempDir.resolve("invalid_typed.xlsx");
+
+        ExcelSheet sheet = ExcelSheet.builder()
+                .name("TestSheet")
+                .headers(Arrays.asList("Name", "Age"))
+                .rows(Collections.singletonList(Arrays.asList("Hyunsoo", "oops")))
+                .build();
+
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("TestSheet", sheet)
+                .build();
+
+        NinjaExcel.write(workbook, filePath.toFile());
         return filePath.toFile();
     }
 }

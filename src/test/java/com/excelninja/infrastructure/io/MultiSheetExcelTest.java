@@ -393,13 +393,27 @@ class MultiSheetExcelTest {
         assertThat(testFile.toFile()).exists();
         assertThat(testFile.toFile().length()).isGreaterThan(0);
 
+        try (Workbook poiWorkbook = WorkbookFactory.create(testFile.toFile())) {
+            org.apache.poi.xssf.usermodel.XSSFWorkbook xssfWorkbook = (org.apache.poi.xssf.usermodel.XSSFWorkbook) poiWorkbook;
+            assertThat(xssfWorkbook.getProperties().getCoreProperties().getCreator()).isEqualTo(metadata.getAuthor());
+            assertThat(xssfWorkbook.getProperties().getCoreProperties().getTitle()).isEqualTo(metadata.getTitle());
+        }
+
         List<UserDto> readEmployees = NinjaExcel.readSheet(testFile.toFile(), "Employees", UserDto.class);
         List<DepartmentDto> readDepartments = NinjaExcel.readSheet(testFile.toFile(), "Departments", DepartmentDto.class);
+        ExcelWorkbook poiReadWorkbook = new PoiWorkbookReader().read(testFile.toFile());
+        ExcelWorkbook streamingReadWorkbook = new StreamingWorkbookReader().read(testFile.toFile());
 
         assertThat(readEmployees).hasSize(1);
         assertThat(readDepartments).hasSize(1);
         assertThat(readEmployees.get(0).getName()).isEqualTo("John Doe");
         assertThat(readDepartments.get(0).getName()).isEqualTo("IT");
+        assertThat(poiReadWorkbook.getMetadata().getAuthor()).isEqualTo(metadata.getAuthor());
+        assertThat(poiReadWorkbook.getMetadata().getTitle()).isEqualTo(metadata.getTitle());
+        assertThat(poiReadWorkbook.getMetadata().getCreatedDate()).isEqualTo(metadata.getCreatedDate());
+        assertThat(streamingReadWorkbook.getMetadata().getAuthor()).isEqualTo(metadata.getAuthor());
+        assertThat(streamingReadWorkbook.getMetadata().getTitle()).isEqualTo(metadata.getTitle());
+        assertThat(streamingReadWorkbook.getMetadata().getCreatedDate()).isEqualTo(metadata.getCreatedDate());
     }
 
     @Test

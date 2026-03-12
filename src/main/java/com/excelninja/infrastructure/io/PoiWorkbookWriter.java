@@ -4,6 +4,8 @@ import com.excelninja.domain.model.DocumentRow;
 import com.excelninja.domain.model.ExcelSheet;
 import com.excelninja.domain.model.ExcelWorkbook;
 import com.excelninja.domain.model.Header;
+import com.excelninja.domain.model.WorkbookMetadata;
+import org.apache.poi.ooxml.POIXMLProperties;
 import com.excelninja.domain.port.WorkbookWriter;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
@@ -17,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.Optional;
 
 /**
  * Apache POI-based Excel workbook writer.
@@ -42,6 +45,7 @@ public class PoiWorkbookWriter implements WorkbookWriter {
             OutputStream outputStream
     ) throws IOException {
         try (XSSFWorkbook poiWorkbook = new XSSFWorkbook()) {
+            applyWorkbookMetadata(poiWorkbook, workbook.getMetadata());
 
             XSSFCellStyle dateStyle = createDateStyle(poiWorkbook);
             XSSFCellStyle dateTimeStyle = createDateTimeStyle(poiWorkbook);
@@ -59,6 +63,29 @@ public class PoiWorkbookWriter implements WorkbookWriter {
             }
 
             poiWorkbook.write(outputStream);
+        }
+    }
+
+    private void applyWorkbookMetadata(
+            XSSFWorkbook poiWorkbook,
+            WorkbookMetadata metadata
+    ) {
+        if (metadata == null) {
+            return;
+        }
+
+        POIXMLProperties.CoreProperties coreProperties = poiWorkbook.getProperties().getCoreProperties();
+        if (metadata.getAuthor() != null) {
+            coreProperties.setCreator(metadata.getAuthor());
+        }
+        if (metadata.getTitle() != null) {
+            coreProperties.setTitle(metadata.getTitle());
+        }
+
+        if (metadata.getCreatedDate() != null) {
+            Date createdDate = Date.from(metadata.getCreatedDate().atZone(ZoneId.systemDefault()).toInstant());
+            coreProperties.setCreated(Optional.of(createdDate));
+            coreProperties.setModified(Optional.of(createdDate));
         }
     }
 

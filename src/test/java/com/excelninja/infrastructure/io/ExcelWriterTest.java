@@ -130,6 +130,23 @@ class ExcelWriterTest {
         }
     }
 
+    static class ImplicitOrderWriteDto {
+        @ExcelWriteColumn(headerName = "First")
+        private final String first;
+
+        @ExcelWriteColumn(headerName = "Second")
+        private final String second;
+
+        @ExcelWriteColumn(headerName = "Third")
+        private final String third;
+
+        ImplicitOrderWriteDto(String first, String second, String third) {
+            this.first = first;
+            this.second = second;
+            this.third = third;
+        }
+    }
+
     @Test
     @DisplayName("BigDecimal과 LocalDate/LocalDateTime을 포함한 엑셀 작성 및 읽기")
     void write_and_read_excel_with_enhanced_types() throws Exception {
@@ -280,6 +297,26 @@ class ExcelWriterTest {
 
         } finally {
             Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    @DisplayName("order를 생략한 필드는 선언 순서를 유지한다")
+    void writeColumnsWithoutExplicitOrderPreserveDiscoveryOrder() throws Exception {
+        List<ImplicitOrderWriteDto> rows = Collections.singletonList(
+                new ImplicitOrderWriteDto("A", "B", "C")
+        );
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ExcelWorkbook workbook = ExcelWorkbook.builder().sheet("ImplicitOrder", rows).build();
+        NinjaExcel.write(workbook, outputStream);
+
+        try (Workbook poiWorkbook = WorkbookFactory.create(new ByteArrayInputStream(outputStream.toByteArray()))) {
+            Sheet sheet = poiWorkbook.getSheet("ImplicitOrder");
+            Row headerRow = sheet.getRow(0);
+            assertEquals("First", headerRow.getCell(0).getStringCellValue());
+            assertEquals("Second", headerRow.getCell(1).getStringCellValue());
+            assertEquals("Third", headerRow.getCell(2).getStringCellValue());
         }
     }
 }

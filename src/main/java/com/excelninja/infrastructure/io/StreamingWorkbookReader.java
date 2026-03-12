@@ -6,10 +6,12 @@ import com.excelninja.domain.exception.InvalidDocumentStructureException;
 import com.excelninja.domain.model.ExcelSheet;
 import com.excelninja.domain.model.ExcelWorkbook;
 import com.excelninja.domain.model.Headers;
+import com.excelninja.domain.model.WorkbookMetadata;
 import com.excelninja.domain.port.WorkbookReader;
 import com.excelninja.infrastructure.converter.DefaultConverter;
 import com.excelninja.infrastructure.metadata.EntityMetadata;
 import com.excelninja.infrastructure.metadata.FieldMapping;
+import org.apache.poi.ooxml.POIXMLProperties;
 import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.util.CellReference;
@@ -28,6 +30,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -97,6 +101,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
         SharedStringsTable sharedStringsTable = (SharedStringsTable) xssfReader.getSharedStringsTable();
         StylesTable stylesTable = xssfReader.getStylesTable();
         Map<String, ExcelSheet> sheets = new LinkedHashMap<>();
+        WorkbookMetadata metadata = readWorkbookMetadata(opcPackage);
         XSSFReader.SheetIterator sheetIterator = (XSSFReader.SheetIterator) xssfReader.getSheetsData();
 
         while (sheetIterator.hasNext()) {
@@ -107,7 +112,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
             }
         }
         if (sheets.isEmpty()) throw new InvalidDocumentStructureException("No sheets found in workbook");
-        ExcelWorkbook.WorkbookBuilder builder = ExcelWorkbook.builder();
+        ExcelWorkbook.WorkbookBuilder builder = ExcelWorkbook.builder().metadata(metadata);
         sheets.forEach(builder::sheet);
         return builder.build();
     }
@@ -167,6 +172,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
         private final StringBuilder currentCellValue = new StringBuilder();
 
         protected Map<Integer, Object> currentRowData;
+        protected int currentRowNumber;
 
         public BaseSheetHandler(
                 SharedStringsTable sst,
@@ -185,6 +191,8 @@ public class StreamingWorkbookReader implements WorkbookReader {
         ) {
             if ("row".equals(qName)) {
                 currentRowData = new HashMap<>();
+                String rowNumber = attributes.getValue("r");
+                currentRowNumber = rowNumber != null ? Integer.parseInt(rowNumber) : -1;
             } else if ("c".equals(qName)) {
                 currentCellRef = attributes.getValue("r");
                 currentCellType = attributes.getValue("t");
@@ -304,6 +312,13 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 } catch (Exception e) {
                     producerException = e;
                 } finally {
+                    if (closeOnFinish && managedInputStream != null) {
+                        try {
+                            managedInputStream.close();
+                        } catch (IOException e) {
+                            logger.log(Level.WARNING, "[NINJA-EXCEL] Error closing input stream", e);
+                        }
+                    }
                     try {
                         queue.put(END_OF_QUEUE);
                     } catch (InterruptedException e) {
@@ -327,6 +342,9 @@ public class StreamingWorkbookReader implements WorkbookReader {
                 return true;
             }
             fillNextChunk();
+            if (producerException != null) {
+                throw new DocumentConversionException("Error in background producer thread", producerException);
+            }
             return nextChunk != null && !nextChunk.isEmpty();
         }
 
@@ -430,10 +448,22 @@ public class StreamingWorkbookReader implements WorkbookReader {
                     isHeaderProcessed = true;
                 } else {
                     if (hasMeaningfulValues(rowValues)) {
+                        T entity;
                         try {
-                            queue.put(convertRowToEntity(rowValues));
+                            entity = convertRowToEntity(rowValues);
                         } catch (Exception e) {
-                            logger.warning("[NINJA-EXCEL] Failed to process or queue row: " + e.getMessage());
+                            throw e instanceof DocumentConversionException
+                                    ? (DocumentConversionException) e
+                                    : new DocumentConversionException("Failed to process chunk row " + currentRowNumber, e);
+                        }
+                        try {
+                            queue.put(entity);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new DocumentConversionException(
+                                    "Chunk queue interrupted while processing row " + currentRowNumber,
+                                    e
+                            );
                         }
                     }
                 }
@@ -452,17 +482,38 @@ public class StreamingWorkbookReader implements WorkbookReader {
             }
 
             private T convertRowToEntity(List<Object> rowValues) throws Exception {
-                T entity = entityMetadata.createInstance();
-                List<FieldMapping> fieldMappings = entityMetadata.getReadFieldMappings();
-                for (int i = 0; i < fieldMappings.size(); i++) {
-                    FieldMapping fieldMapping = fieldMappings.get(i);
-                    int colIdx = fieldToColumnMapping.get(i);
-                    Object cellValue = (colIdx < rowValues.size()) ? rowValues.get(colIdx) : null;
-                    fieldMapping.setValue(entity, cellValue, converter);
+                try {
+                    T entity = entityMetadata.createInstance();
+                    List<FieldMapping> fieldMappings = entityMetadata.getReadFieldMappings();
+                    for (int i = 0; i < fieldMappings.size(); i++) {
+                        FieldMapping fieldMapping = fieldMappings.get(i);
+                        int colIdx = fieldToColumnMapping.get(i);
+                        Object cellValue = (colIdx < rowValues.size()) ? rowValues.get(colIdx) : null;
+                        fieldMapping.setValue(entity, cellValue, converter);
+                    }
+                    return entity;
+                } catch (Exception e) {
+                    throw new DocumentConversionException(
+                            "Failed to convert chunk row " + currentRowNumber + " to entity " + entityMetadata,
+                            e
+                    );
                 }
-                return entity;
             }
         }
+    }
+
+    private WorkbookMetadata readWorkbookMetadata(OPCPackage opcPackage) throws Exception {
+        POIXMLProperties properties = new POIXMLProperties(opcPackage);
+        POIXMLProperties.CoreProperties coreProperties = properties.getCoreProperties();
+        LocalDateTime createdDate = coreProperties.getCreated() != null
+                ? LocalDateTime.ofInstant(coreProperties.getCreated().toInstant(), ZoneId.systemDefault())
+                : null;
+
+        return new WorkbookMetadata(
+                coreProperties.getCreator(),
+                coreProperties.getTitle(),
+                createdDate
+        );
     }
 
     private static Object parseValue(

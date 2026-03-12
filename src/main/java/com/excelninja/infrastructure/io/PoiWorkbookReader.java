@@ -3,7 +3,9 @@ package com.excelninja.infrastructure.io;
 import com.excelninja.domain.exception.InvalidDocumentStructureException;
 import com.excelninja.domain.model.ExcelSheet;
 import com.excelninja.domain.model.ExcelWorkbook;
+import com.excelninja.domain.model.WorkbookMetadata;
 import com.excelninja.domain.port.WorkbookReader;
+import org.apache.poi.ooxml.POIXMLProperties;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.FormulaError;
@@ -14,6 +16,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -36,7 +42,8 @@ public class PoiWorkbookReader implements WorkbookReader {
     @Override
     public ExcelWorkbook read(InputStream inputStream) throws IOException {
         try (XSSFWorkbook workbook = new XSSFWorkbook(inputStream)) {
-            ExcelWorkbook.WorkbookBuilder builder = ExcelWorkbook.builder();
+            ExcelWorkbook.WorkbookBuilder builder = ExcelWorkbook.builder()
+                    .metadata(readWorkbookMetadata(workbook.getProperties().getCoreProperties()));
 
             for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
                 org.apache.poi.ss.usermodel.Sheet poiSheet = workbook.getSheetAt(i);
@@ -167,35 +174,58 @@ public class PoiWorkbookReader implements WorkbookReader {
             case STRING:
                 return cell.getStringCellValue();
             case NUMERIC:
-                // Convert number to string (remove decimal point for integers)
-                double numValue = cell.getNumericCellValue();
-                if (numValue == Math.floor(numValue) && !Double.isInfinite(numValue)) {
-                    return String.valueOf((long) numValue);
-                }
-                return String.valueOf(numValue);
+                return formatValueAsString(extractCellValue(cell));
             case BOOLEAN:
-                return String.valueOf(cell.getBooleanCellValue());
+                return formatValueAsString(cell.getBooleanCellValue());
             case FORMULA:
-                // Try to get cached formula result
-                try {
-                    return cell.getStringCellValue();
-                } catch (IllegalStateException e) {
-                    // If formula result is numeric, get numeric value
-                    try {
-                        double formulaNumValue = cell.getNumericCellValue();
-                        if (formulaNumValue == Math.floor(formulaNumValue) && !Double.isInfinite(formulaNumValue)) {
-                            return String.valueOf((long) formulaNumValue);
-                        }
-                        return String.valueOf(formulaNumValue);
-                    } catch (IllegalStateException e2) {
-                        // If all else fails, return formula string
-                        return cell.getCellFormula();
-                    }
-                }
+                return formatValueAsString(extractFormulaValue(cell));
             case BLANK:
                 return null;
             default:
-                return cell.toString();
+                return formatValueAsString(cell.toString());
         }
+    }
+
+    private String formatValueAsString(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Number) {
+            double numericValue = ((Number) value).doubleValue();
+            if (numericValue == Math.floor(numericValue) && !Double.isInfinite(numericValue) && !Double.isNaN(numericValue)) {
+                return String.valueOf(((Number) value).longValue());
+            }
+            return String.valueOf(numericValue);
+        }
+
+        if (value instanceof java.util.Date) {
+            LocalDateTime dateTime = ((java.util.Date) value).toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDateTime();
+            if (dateTime.toLocalTime().equals(LocalTime.MIDNIGHT)) {
+                return DateTimeFormatter.ISO_LOCAL_DATE.format(dateTime.toLocalDate());
+            }
+            return DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+                    .format(dateTime.withNano(0));
+        }
+
+        return value.toString();
+    }
+
+    private WorkbookMetadata readWorkbookMetadata(POIXMLProperties.CoreProperties coreProperties) {
+        if (coreProperties == null) {
+            return new WorkbookMetadata();
+        }
+
+        LocalDateTime createdDate = coreProperties.getCreated() != null
+                ? LocalDateTime.ofInstant(coreProperties.getCreated().toInstant(), ZoneId.systemDefault())
+                : null;
+
+        return new WorkbookMetadata(
+                coreProperties.getCreator(),
+                coreProperties.getTitle(),
+                createdDate
+        );
     }
 }

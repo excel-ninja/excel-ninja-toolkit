@@ -4,6 +4,7 @@ import com.excelninja.application.facade.NinjaExcel;
 import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
 import com.excelninja.domain.exception.DocumentConversionException;
+import com.excelninja.domain.model.ExcelSheet;
 import com.excelninja.domain.model.ExcelWorkbook;
 import com.excelninja.infrastructure.io.StreamingWorkbookReader;
 import org.junit.jupiter.api.*;
@@ -191,6 +192,16 @@ class NinjaExcelStreamingTest {
         public int hashCode() {
             return Objects.hash(productId, productName, price, category);
         }
+    }
+
+    static class StrictEmployee {
+        @ExcelReadColumn(headerName = "ID")
+        private Long id;
+
+        @ExcelReadColumn(headerName = "Age")
+        private Integer age;
+
+        public StrictEmployee() {}
     }
 
     @BeforeAll
@@ -437,6 +448,30 @@ class NinjaExcelStreamingTest {
                 assertThat(totalRecords).isEqualTo(10000);
             }
         }
+
+        @Test
+        @DisplayName("청크 처리 중 변환 오류는 예외로 전파된다")
+        void shouldPropagateChunkConversionErrors() throws IOException {
+            File invalidChunkFile = createInvalidChunkWorkbook("invalid_chunk.xlsx");
+            Iterator<List<StrictEmployee>> chunks = NinjaExcel.readInChunks(invalidChunkFile, StrictEmployee.class, 1);
+
+            try {
+                assertThatThrownBy(() -> {
+                    while (chunks.hasNext()) {
+                        chunks.next();
+                    }
+                }).isInstanceOf(DocumentConversionException.class)
+                        .hasMessageContaining("background producer thread");
+            } finally {
+                if (chunks instanceof AutoCloseable) {
+                    try {
+                        ((AutoCloseable) chunks).close();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        }
     }
 
     @Nested
@@ -636,5 +671,20 @@ class NinjaExcelStreamingTest {
                 System.err.println("[TEST-CLEANUP-WARN] Failed to delete file: " + file.getAbsolutePath());
             }
         }
+    }
+
+    private static File createInvalidChunkWorkbook(String filename) throws IOException {
+        File file = new File(tempDir, filename);
+        ExcelSheet sheet = ExcelSheet.builder()
+                .name("Employees")
+                .headers("ID", "Age")
+                .rows(Collections.singletonList(Arrays.asList(1L, "oops")))
+                .build();
+
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("Employees", sheet)
+                .build();
+        NinjaExcel.write(workbook, file);
+        return file;
     }
 }

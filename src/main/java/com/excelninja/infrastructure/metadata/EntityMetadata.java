@@ -144,6 +144,7 @@ public class EntityMetadata<T> {
 
     private List<FieldMapping> extractReadFieldMappings(Class<T> entityType) {
         List<FieldMapping> mappings = new ArrayList<>();
+        int discoveryOrder = 0;
 
         for (Field field : getAllFields(entityType)) {
             ExcelReadColumn annotation = field.getAnnotation(ExcelReadColumn.class);
@@ -155,6 +156,7 @@ public class EntityMetadata<T> {
                         annotation.type() == Void.class ? field.getType() : annotation.type(),
                         annotation.defaultValue(),
                         0,
+                        discoveryOrder++,
                         FieldMapping.Type.READ
                 ));
             }
@@ -165,6 +167,7 @@ public class EntityMetadata<T> {
 
     private List<FieldMapping> extractWriteFieldMappings(Class<T> entityType) {
         List<FieldMapping> mappings = new ArrayList<>();
+        int discoveryOrder = 0;
 
         for (Field field : getAllFields(entityType)) {
             ExcelWriteColumn annotation = field.getAnnotation(ExcelWriteColumn.class);
@@ -176,6 +179,7 @@ public class EntityMetadata<T> {
                         field.getType(),
                         "",
                         annotation.order(),
+                        discoveryOrder++,
                         FieldMapping.Type.WRITE
                 ));
             }
@@ -183,7 +187,8 @@ public class EntityMetadata<T> {
 
         if (!mappings.isEmpty()) {
             validateWriteMappings(mappings, entityType);
-            mappings.sort(Comparator.comparing(FieldMapping::getOrder));
+            mappings.sort(Comparator.comparingInt(FieldMapping::getOrder)
+                    .thenComparingInt(FieldMapping::getDiscoveryOrder));
         }
 
         return Collections.unmodifiableList(mappings);

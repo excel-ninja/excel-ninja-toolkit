@@ -90,7 +90,7 @@ public final class NinjaExcel {
             } else {
                 return readWithPoi(file, clazz);
             }
-        } catch (EntityMappingException | HeaderMismatchException e) {
+        } catch (DocumentConversionException | EntityMappingException | HeaderMismatchException e) {
             throw e;
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;

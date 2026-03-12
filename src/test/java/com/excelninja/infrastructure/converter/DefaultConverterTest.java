@@ -117,4 +117,12 @@ class DefaultConverterTest {
         assertThat(fromLocalDateTime.toInstant().atZone(zoneId).toLocalDateTime())
                 .isEqualTo(LocalDateTime.of(2024, 12, 25, 14, 30, 5));
     }
+
+    @Test
+    @DisplayName("Number and boolean values can be converted to String")
+    void convertScalarValuesToString() {
+        assertThat(converter.convert(123L, String.class)).isEqualTo("123");
+        assertThat(converter.convert(123.5, String.class)).isEqualTo("123.5");
+        assertThat(converter.convert(true, String.class)).isEqualTo("true");
+    }
 }

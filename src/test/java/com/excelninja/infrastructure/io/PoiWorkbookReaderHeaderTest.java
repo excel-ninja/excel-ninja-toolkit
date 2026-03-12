@@ -77,4 +77,36 @@ class PoiWorkbookReaderHeaderTest {
                 .isInstanceOf(InvalidDocumentStructureException.class)
                 .hasMessageContaining("Header cannot be empty");
     }
+
+    @Test
+    @DisplayName("Formula headers with boolean and date results use cached result values")
+    void shouldConvertFormulaHeadersWithBooleanAndDateResults() throws Exception {
+        Path workbookPath = tempDir.resolve("formula_header_types.xlsx");
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("FormulaHeaders");
+            Row headerRow = sheet.createRow(0);
+            headerRow.createCell(0).setCellFormula("TRUE()");
+            headerRow.createCell(1).setCellFormula("DATE(2024,12,25)");
+
+            org.apache.poi.ss.usermodel.CellStyle dateStyle = workbook.createCellStyle();
+            dateStyle.setDataFormat(workbook.createDataFormat().getFormat("yyyy-mm-dd"));
+            headerRow.getCell(1).setCellStyle(dateStyle);
+
+            Row dataRow = sheet.createRow(1);
+            dataRow.createCell(0).setCellValue("Y");
+            dataRow.createCell(1).setCellValue("Holiday");
+
+            workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
+
+            try (OutputStream outputStream = Files.newOutputStream(workbookPath)) {
+                workbook.write(outputStream);
+            }
+        }
+
+        ExcelWorkbook workbook = new PoiWorkbookReader().read(workbookPath.toFile());
+
+        assertThat(workbook.getSheet("FormulaHeaders").getHeaders().getHeaderNames())
+                .containsExactly("true", "2024-12-25");
+    }
 }

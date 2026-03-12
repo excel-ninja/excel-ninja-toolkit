@@ -34,6 +34,10 @@ public class DefaultConverter implements ConverterPort {
                 return rawValue;
             }
 
+            if (targetType == String.class) {
+                return convertToString(rawValue);
+            }
+
             if (rawValue instanceof Number) {
                 return convertNumber((Number) rawValue, targetType);
             }
@@ -56,10 +60,6 @@ public class DefaultConverter implements ConverterPort {
 
             if (targetType == BigDecimal.class) {
                 return convertToBigDecimal(rawValue);
-            }
-
-            if (targetType == String.class) {
-                return convertToString(rawValue);
             }
 
             throw new DocumentConversionException(String.format("Cannot convert value '%s' of type %s to %s", rawValue, rawValue.getClass().getSimpleName(), targetType.getSimpleName()));

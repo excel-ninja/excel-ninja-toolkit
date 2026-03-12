@@ -18,6 +18,7 @@ public final class FieldMapping {
     private final Class<?> targetType;
     private final String defaultValue;
     private final int order;
+    private final int discoveryOrder;
     private final Type type;
 
     public FieldMapping(
@@ -26,6 +27,7 @@ public final class FieldMapping {
             Class<?> targetType,
             String defaultValue,
             int order,
+            int discoveryOrder,
             Type type
     ) {
         this.field = Objects.requireNonNull(field, "Field cannot be null");
@@ -33,6 +35,7 @@ public final class FieldMapping {
         this.targetType = Objects.requireNonNull(targetType, "Target type cannot be null");
         this.defaultValue = defaultValue != null ? defaultValue : "";
         this.order = order;
+        this.discoveryOrder = discoveryOrder;
         this.type = Objects.requireNonNull(type, "Type cannot be null");
     }
 
@@ -93,6 +96,10 @@ public final class FieldMapping {
         return order;
     }
 
+    public int getDiscoveryOrder() {
+        return discoveryOrder;
+    }
+
     public Type getType() {
         return type;
     }
@@ -107,6 +114,7 @@ public final class FieldMapping {
         if (o == null || getClass() != o.getClass()) return false;
         FieldMapping that = (FieldMapping) o;
         return order == that.order &&
+                discoveryOrder == that.discoveryOrder &&
                 Objects.equals(field, that.field) &&
                 Objects.equals(headerName, that.headerName) &&
                 Objects.equals(targetType, that.targetType) &&
@@ -116,11 +124,12 @@ public final class FieldMapping {
 
     @Override
     public int hashCode() {
-        return Objects.hash(field, headerName, targetType, defaultValue, order, type);
+        return Objects.hash(field, headerName, targetType, defaultValue, order, discoveryOrder, type);
     }
 
     @Override
     public String toString() {
-        return String.format("FieldMapping{field=%s, header='%s', type=%s, order=%d}", field.getName(), headerName, targetType.getSimpleName(), order);
+        return String.format("FieldMapping{field=%s, header='%s', type=%s, order=%d, discoveryOrder=%d}",
+                field.getName(), headerName, targetType.getSimpleName(), order, discoveryOrder);
     }
 }

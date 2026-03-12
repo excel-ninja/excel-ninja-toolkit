@@ -141,6 +141,8 @@ while (chunks.hasNext()) {
     List<User> chunk = chunks.next();
     // Process chunk
 }
+// Full iteration closes internal file resources automatically.
+// If you stop early, close the iterator when it implements AutoCloseable.
 
 // Read multiple specific sheets
 List<String> sheetsToRead = Arrays.asList("Users", "Customers");
@@ -156,7 +158,7 @@ For advanced workbook creation:
 ExcelWorkbook workbook = ExcelWorkbook.builder()
     .sheet("Users", userList)
     .sheet("Products", productList)
-    .metadata(new WorkbookMetadata()) // Optional metadata
+    .metadata(new WorkbookMetadata()) // Optional metadata, persisted as workbook core properties
     .build();
 
 // Access workbook information
