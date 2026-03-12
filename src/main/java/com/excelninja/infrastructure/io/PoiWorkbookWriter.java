@@ -129,11 +129,16 @@ public class PoiWorkbookWriter implements WorkbookWriter {
             XSSFCellStyle dateTimeStyle
     ) {
         if (rawValue == null) {
-            cell.setCellValue("");
+            cell.setBlank();
             cell.setCellStyle(dataStyle);
         } else if (rawValue instanceof Number) {
             if (rawValue instanceof BigDecimal) {
-                cell.setCellValue(((BigDecimal) rawValue).doubleValue());
+                BigDecimal decimalValue = (BigDecimal) rawValue;
+                if (canStoreAsExactNumeric(decimalValue)) {
+                    cell.setCellValue(decimalValue.doubleValue());
+                } else {
+                    cell.setCellValue(decimalValue.toPlainString());
+                }
             } else {
                 cell.setCellValue(((Number) rawValue).doubleValue());
             }
@@ -158,6 +163,16 @@ public class PoiWorkbookWriter implements WorkbookWriter {
             cell.setCellValue(rawValue.toString());
             cell.setCellStyle(dataStyle);
         }
+    }
+
+    private boolean canStoreAsExactNumeric(BigDecimal value) {
+        double doubleValue = value.doubleValue();
+        if (Double.isNaN(doubleValue) || Double.isInfinite(doubleValue)) {
+            return false;
+        }
+
+        BigDecimal roundTripped = BigDecimal.valueOf(doubleValue);
+        return value.stripTrailingZeros().compareTo(roundTripped.stripTrailingZeros()) == 0;
     }
 
     private void adjustColumnWidths(

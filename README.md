@@ -115,7 +115,7 @@ NinjaExcel.write(multiSheet, "multi-sheet.xlsx");
 
 ### Custom Type Conversion
 
-ExcelNinja includes built-in support for common types including `LocalDate`:
+ExcelNinja includes built-in support for common types including `LocalDate`, numeric strings, and blank-cell defaults:
 
 ```java
 public class Employee {
@@ -125,6 +125,8 @@ public class Employee {
     @ExcelReadColumn(headerName = "Salary", defaultValue = "0")
     private Double salary;
     
+    // Blank cells use defaultValue when provided.
+    // Numeric strings like "123.45" also convert to numeric fields.
     // Supports various date formats automatically:
     // yyyy-MM-dd, dd/MM/yyyy, MM/dd/yyyy, etc.
 }
@@ -344,17 +346,9 @@ ExcelNinja is designed for high performance:
 
 ---
 
-## Known Issues
+## Notes
 
-While ExcelNinja is production-ready, please be aware of these known issues:
-
-### Current Limitations
-
-1. **Date Format in Excel Output**: Excel date format uses lowercase `mm` which represents minutes instead of months. This may cause display issues in some cases. Will be fixed in next release.
-
-2. **String-to-Number Conversion**: Converting string values (e.g., `"123"`) to numeric types may fail in some edge cases. Workaround: Ensure Excel cells are properly formatted as numbers.
-
-These issues are tracked and will be addressed in upcoming releases. For critical needs, please check our GitHub issues or contribute a fix!
+- High-precision `BigDecimal` values that cannot be represented exactly as Excel numeric cells are written as text to preserve the exact value.
 
 ---
 

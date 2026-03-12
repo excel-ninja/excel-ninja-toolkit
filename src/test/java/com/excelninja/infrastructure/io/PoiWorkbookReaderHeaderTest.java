@@ -109,4 +109,29 @@ class PoiWorkbookReaderHeaderTest {
         assertThat(workbook.getSheet("FormulaHeaders").getHeaders().getHeaderNames())
                 .containsExactly("true", "2024-12-25");
     }
+
+    @Test
+    @DisplayName("Sparse headers with missing intermediate cells are rejected")
+    void shouldRejectSparseHeaders() throws Exception {
+        Path workbookPath = tempDir.resolve("sparse_headers.xlsx");
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("SparseHeaders");
+            Row headerRow = sheet.createRow(0);
+            headerRow.createCell(0).setCellValue("ID");
+            headerRow.createCell(2).setCellValue("Name");
+
+            Row dataRow = sheet.createRow(1);
+            dataRow.createCell(0).setCellValue(1);
+            dataRow.createCell(2).setCellValue("Alice");
+
+            try (OutputStream outputStream = Files.newOutputStream(workbookPath)) {
+                workbook.write(outputStream);
+            }
+        }
+
+        assertThatThrownBy(() -> new PoiWorkbookReader().read(workbookPath.toFile()))
+                .isInstanceOf(InvalidDocumentStructureException.class)
+                .hasMessageContaining("Header cannot be empty at column 1");
+    }
 }

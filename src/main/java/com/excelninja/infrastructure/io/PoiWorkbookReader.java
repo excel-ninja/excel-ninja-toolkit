@@ -65,10 +65,16 @@ public class PoiWorkbookReader implements WorkbookReader {
 
         Row headerRow = rowIterator.next();
         List<String> headerTitles = new ArrayList<>();
-        for (Cell cell : headerRow) {
+        int headerColumnCount = headerRow.getLastCellNum();
+        if (headerColumnCount < 0) {
+            throw new InvalidDocumentStructureException("No headers found in sheet: " + sheetName);
+        }
+
+        for (int columnIndex = 0; columnIndex < headerColumnCount; columnIndex++) {
+            Cell cell = headerRow.getCell(columnIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
             String headerValue = getCellValueAsString(cell);
             if (headerValue == null || headerValue.trim().isEmpty()) {
-                throw new InvalidDocumentStructureException("Header cannot be empty at column " + cell.getColumnIndex() + " in sheet " + sheetName);
+                throw new InvalidDocumentStructureException("Header cannot be empty at column " + columnIndex + " in sheet " + sheetName);
             }
             headerTitles.add(headerValue.trim());
         }

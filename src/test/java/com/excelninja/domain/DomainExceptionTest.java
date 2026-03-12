@@ -59,6 +59,42 @@ class DomainExceptionTest {
     }
 
     @Test
+    @DisplayName("모든 문자열 경로 overload는 null/blank 경로를 일관되게 거부")
+    void stringPathOverloadsValidateNullAndBlankInputs() {
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet(Collections.singletonList(new ValidWriteDto("test")))
+                .build();
+
+        assertThatThrownBy(() -> NinjaExcel.readSheet((String) null, "Sheet1", ValidReadDto.class))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("File path cannot be null or empty");
+
+        assertThatThrownBy(() -> NinjaExcel.readAllSheets("   ", ValidReadDto.class))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("File path cannot be null or empty");
+
+        assertThatThrownBy(() -> NinjaExcel.readSheets((String) null, ValidReadDto.class, Collections.singletonList("Sheet1")))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("File path cannot be null or empty");
+
+        assertThatThrownBy(() -> NinjaExcel.getSheetNames("  "))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("File path cannot be null or empty");
+
+        assertThatThrownBy(() -> NinjaExcel.readInChunks((String) null, ValidReadDto.class))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("File path cannot be null or empty");
+
+        assertThatThrownBy(() -> NinjaExcel.write(workbook, (String) null))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("File path cannot be null or empty");
+
+        assertThatThrownBy(() -> NinjaExcel.write(workbook, "   "))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("File path cannot be null or empty");
+    }
+
+    @Test
     @DisplayName("어노테이션이 없는 클래스 사용 시 EntityMappingException 발생")
     void readWithoutAnnotation() throws IOException {
         File validExcel = createValidExcelFile();

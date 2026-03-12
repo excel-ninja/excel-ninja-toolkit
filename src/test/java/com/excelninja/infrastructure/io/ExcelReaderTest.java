@@ -4,16 +4,22 @@ import com.excelninja.application.facade.NinjaExcel;
 import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
 import com.excelninja.domain.model.ExcelWorkbook;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -122,6 +128,73 @@ class ExcelReaderTest {
 
         @ExcelReadColumn(headerName = "DateTimeAsLocalDateTime")
         private LocalDateTime dateTimeAsLocalDateTime;
+    }
+
+    public static class NullableScalarWriteDto {
+        @ExcelWriteColumn(headerName = "ID", order = 1)
+        private final Long id;
+
+        @ExcelWriteColumn(headerName = "Age", order = 2)
+        private final Integer age;
+
+        @ExcelWriteColumn(headerName = "Salary", order = 3)
+        private final BigDecimal salary;
+
+        @ExcelWriteColumn(headerName = "Active", order = 4)
+        private final Boolean active;
+
+        @ExcelWriteColumn(headerName = "Birthday", order = 5)
+        private final LocalDate birthday;
+
+        @ExcelWriteColumn(headerName = "LastUpdated", order = 6)
+        private final LocalDateTime lastUpdated;
+
+        public NullableScalarWriteDto(
+                Long id,
+                Integer age,
+                BigDecimal salary,
+                Boolean active,
+                LocalDate birthday,
+                LocalDateTime lastUpdated
+        ) {
+            this.id = id;
+            this.age = age;
+            this.salary = salary;
+            this.active = active;
+            this.birthday = birthday;
+            this.lastUpdated = lastUpdated;
+        }
+    }
+
+    public static class NullableScalarReadDto {
+        @ExcelReadColumn(headerName = "ID")
+        private Long id;
+
+        @ExcelReadColumn(headerName = "Age")
+        private Integer age;
+
+        @ExcelReadColumn(headerName = "Salary")
+        private BigDecimal salary;
+
+        @ExcelReadColumn(headerName = "Active")
+        private Boolean active;
+
+        @ExcelReadColumn(headerName = "Birthday")
+        private LocalDate birthday;
+
+        @ExcelReadColumn(headerName = "LastUpdated")
+        private LocalDateTime lastUpdated;
+    }
+
+    public static class StringCellReadDto {
+        @ExcelReadColumn(headerName = "Age")
+        private Integer age;
+
+        @ExcelReadColumn(headerName = "Salary", defaultValue = "0.5")
+        private Double salary;
+
+        @ExcelReadColumn(headerName = "Active")
+        private Boolean active;
     }
 
     @Test
@@ -244,5 +317,59 @@ class ExcelReaderTest {
         assertThat(row.dateTimeAsString).isEqualTo("2024-12-25T14:30:05");
         assertThat(row.dateTimeAsDate.toInstant().atZone(zoneId).toLocalDateTime()).isEqualTo(dateTime);
         assertThat(row.dateTimeAsLocalDateTime).isEqualTo(dateTime);
+    }
+
+    @Test
+    @DisplayName("Null scalar values round-trip without becoming invalid empty strings")
+    void readNullScalarCellsAsNull() {
+        List<NullableScalarWriteDto> testData = Collections.singletonList(
+                new NullableScalarWriteDto(1L, null, null, null, null, null)
+        );
+
+        Path testFile = tempDir.resolve("nullable_scalar_cells.xlsx");
+        ExcelWorkbook workbook = ExcelWorkbook.builder().sheet(testData).build();
+        NinjaExcel.write(workbook, testFile.toString());
+
+        List<NullableScalarReadDto> rows = NinjaExcel.read(testFile.toFile(), NullableScalarReadDto.class);
+
+        assertThat(rows).hasSize(1);
+        NullableScalarReadDto row = rows.get(0);
+        assertThat(row.id).isEqualTo(1L);
+        assertThat(row.age).isNull();
+        assertThat(row.salary).isNull();
+        assertThat(row.active).isNull();
+        assertThat(row.birthday).isNull();
+        assertThat(row.lastUpdated).isNull();
+    }
+
+    @Test
+    @DisplayName("POI reader converts string scalar cells and applies default values for empty strings")
+    void readStringScalarCellsAndApplyDefaults() throws Exception {
+        Path workbookPath = tempDir.resolve("string_scalar_cells.xlsx");
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Sheet1");
+            Row headerRow = sheet.createRow(0);
+            headerRow.createCell(0).setCellValue("Age");
+            headerRow.createCell(1).setCellValue("Salary");
+            headerRow.createCell(2).setCellValue("Active");
+
+            Row dataRow = sheet.createRow(1);
+            dataRow.createCell(0).setCellValue("42");
+            dataRow.createCell(1).setCellValue("");
+            dataRow.createCell(2).setCellValue("yes");
+
+            try (OutputStream outputStream = java.nio.file.Files.newOutputStream(workbookPath)) {
+                workbook.write(outputStream);
+            }
+        }
+
+        List<StringCellReadDto> rows = NinjaExcel.read(workbookPath.toFile(), StringCellReadDto.class);
+
+        assertThat(rows).hasSize(1);
+        StringCellReadDto row = rows.get(0);
+        assertThat(row.age).isEqualTo(42);
+        assertThat(row.salary).isEqualTo(0.5d);
+        assertThat(row.active).isEqualTo(true);
     }
 }

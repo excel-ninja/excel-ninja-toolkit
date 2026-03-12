@@ -65,8 +65,9 @@ public final class FieldMapping {
             ConverterPort converter
     ) {
         try {
-            if (value != null) {
-                return converter.convert(value, targetType);
+            Object normalizedValue = normalizeValue(value);
+            if (normalizedValue != null) {
+                return converter.convert(normalizedValue, targetType);
             } else if (!defaultValue.isEmpty()) {
                 return converter.convert(defaultValue, targetType);
             }
@@ -74,6 +75,14 @@ public final class FieldMapping {
         } catch (Exception e) {
             throw new DocumentConversionException(field.getName(), value, "Type conversion failed: " + e.getMessage());
         }
+    }
+
+    private Object normalizeValue(Object value) {
+        if (value instanceof String && ((String) value).trim().isEmpty()) {
+            return null;
+        }
+
+        return value;
     }
 
     public Field getField() {

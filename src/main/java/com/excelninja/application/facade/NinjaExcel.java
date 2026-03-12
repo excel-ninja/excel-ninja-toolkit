@@ -63,10 +63,7 @@ public final class NinjaExcel {
             String filePath,
             Class<T> clazz
     ) {
-        if (filePath == null || filePath.trim().isEmpty()) {
-            throw new DocumentConversionException("File path cannot be null or empty");
-        }
-        return read(new File(filePath), clazz);
+        return read(toValidatedFile(filePath), clazz);
     }
 
     public static <T> List<T> read(
@@ -106,7 +103,7 @@ public final class NinjaExcel {
             String sheetName,
             Class<T> clazz
     ) {
-        return readSheet(new File(filePath), sheetName, clazz);
+        return readSheet(toValidatedFile(filePath), sheetName, clazz);
     }
 
     public static <T> List<T> readSheet(
@@ -156,7 +153,7 @@ public final class NinjaExcel {
             String filePath,
             Class<T> clazz
     ) {
-        return readAllSheets(new File(filePath), clazz);
+        return readAllSheets(toValidatedFile(filePath), clazz);
     }
 
     public static <T> Map<String, List<T>> readAllSheets(
@@ -204,7 +201,7 @@ public final class NinjaExcel {
             String filePath,
             Class<T> clazz
     ) {
-        return readInChunks(new File(filePath), clazz, DEFAULT_CHUNK_SIZE);
+        return readInChunks(toValidatedFile(filePath), clazz, DEFAULT_CHUNK_SIZE);
     }
 
     public static <T> ChunkReader<T> readInChunks(
@@ -219,7 +216,7 @@ public final class NinjaExcel {
             Class<T> clazz,
             int chunkSize
     ) {
-        return readInChunks(new File(filePath), clazz, chunkSize);
+        return readInChunks(toValidatedFile(filePath), clazz, chunkSize);
     }
 
     public static <T> ChunkReader<T> readInChunks(
@@ -251,7 +248,7 @@ public final class NinjaExcel {
             Class<T> clazz,
             List<String> sheetNames
     ) {
-        return readSheets(new File(filePath), clazz, sheetNames);
+        return readSheets(toValidatedFile(filePath), clazz, sheetNames);
     }
 
     public static <T> Map<String, List<T>> readSheets(
@@ -299,7 +296,7 @@ public final class NinjaExcel {
     }
 
     public static List<String> getSheetNames(String filePath) {
-        return getSheetNames(new File(filePath));
+        return getSheetNames(toValidatedFile(filePath));
     }
 
     public static List<String> getSheetNames(File file) {
@@ -321,7 +318,10 @@ public final class NinjaExcel {
             ExcelWorkbook workbook,
             String fileName
     ) {
-        write(workbook, new File(fileName));
+        if (workbook == null) {
+            throw new DocumentConversionException("ExcelWorkbook cannot be null");
+        }
+        write(workbook, toValidatedFile(fileName));
     }
 
     public static void write(
@@ -507,6 +507,14 @@ public final class NinjaExcel {
         if (file.length() == 0) {
             throw new DocumentConversionException("Excel file is empty: " + file.getAbsolutePath());
         }
+    }
+
+    private static File toValidatedFile(String filePath) {
+        if (filePath == null || filePath.trim().isEmpty()) {
+            throw new DocumentConversionException("File path cannot be null or empty");
+        }
+
+        return new File(filePath.trim());
     }
 
     private static double calculateRecordsPerSecond(

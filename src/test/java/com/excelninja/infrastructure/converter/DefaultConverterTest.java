@@ -125,4 +125,14 @@ class DefaultConverterTest {
         assertThat(converter.convert(123.5, String.class)).isEqualTo("123.5");
         assertThat(converter.convert(true, String.class)).isEqualTo("true");
     }
+
+    @Test
+    @DisplayName("String values can be converted to numeric and boolean targets")
+    void convertStringValuesToScalarTypes() {
+        assertThat(converter.convert("42", Integer.class)).isEqualTo(42);
+        assertThat(converter.convert("1234567890123", Long.class)).isEqualTo(1234567890123L);
+        assertThat(converter.convert("3.1415", Double.class)).isEqualTo(3.1415d);
+        assertThat(converter.convert("YES", Boolean.class)).isEqualTo(true);
+        assertThat(converter.convert("0", boolean.class)).isEqualTo(false);
+    }
 }

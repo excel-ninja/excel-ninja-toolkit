@@ -270,6 +270,44 @@ class ExcelWriterTest {
     }
 
     @Test
+    @DisplayName("정밀도를 잃는 BigDecimal은 문자열로 저장해 정확한 값 유지")
+    void highPrecisionBigDecimal_isStoredAsTextToPreserveExactValue() throws Exception {
+        BigDecimal highPrecisionValue = new BigDecimal("12345678901234567890.12345678901234567890");
+        List<UserWriteDto> users = Collections.singletonList(
+                new UserWriteDto(
+                        1L,
+                        "Precision Keeper",
+                        30,
+                        highPrecisionValue,
+                        LocalDate.of(2024, 1, 1),
+                        LocalDateTime.of(2024, 1, 1, 12, 0, 0),
+                        true
+                )
+        );
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ExcelWorkbook workbook = ExcelWorkbook.builder().sheet("PrecisionText", users).build();
+        NinjaExcel.write(workbook, outputStream);
+
+        try (Workbook poiWorkbook = WorkbookFactory.create(new ByteArrayInputStream(outputStream.toByteArray()))) {
+            Sheet sheet = poiWorkbook.getSheet("PrecisionText");
+            Row row = sheet.getRow(1);
+            assertEquals(org.apache.poi.ss.usermodel.CellType.STRING, row.getCell(3).getCellType());
+            assertEquals(highPrecisionValue.toPlainString(), row.getCell(3).getStringCellValue());
+        }
+
+        Path tempFile = Files.createTempFile("bigdecimal_precision_exact", ".xlsx");
+        try {
+            Files.write(tempFile, outputStream.toByteArray());
+            List<UserReadDto> readUsers = NinjaExcel.read(tempFile.toFile(), UserReadDto.class);
+            assertEquals(1, readUsers.size());
+            assertEquals(0, readUsers.get(0).salary.compareTo(highPrecisionValue));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
     @DisplayName("날짜/시간 포맷 확인 테스트")
     void date_time_formatting_test() throws Exception {
         List<UserWriteDto> usersWithDates = Collections.singletonList(

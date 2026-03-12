@@ -38,14 +38,6 @@ public class DefaultConverter implements ConverterPort {
                 return convertToString(rawValue);
             }
 
-            if (rawValue instanceof Number) {
-                return convertNumber((Number) rawValue, targetType);
-            }
-
-            if (rawValue instanceof Boolean && (targetType == boolean.class || targetType == Boolean.class)) {
-                return rawValue;
-            }
-
             if (targetType == LocalDate.class) {
                 return convertToLocalDate(rawValue);
             }
@@ -62,6 +54,18 @@ public class DefaultConverter implements ConverterPort {
                 return convertToBigDecimal(rawValue);
             }
 
+            if (rawValue instanceof String) {
+                return convertString((String) rawValue, targetType);
+            }
+
+            if (rawValue instanceof Number) {
+                return convertNumber((Number) rawValue, targetType);
+            }
+
+            if (rawValue instanceof Boolean && (targetType == boolean.class || targetType == Boolean.class)) {
+                return rawValue;
+            }
+
             throw new DocumentConversionException(String.format("Cannot convert value '%s' of type %s to %s", rawValue, rawValue.getClass().getSimpleName(), targetType.getSimpleName()));
 
         } catch (DocumentConversionException e) {
@@ -75,6 +79,20 @@ public class DefaultConverter implements ConverterPort {
             Number num,
             Class<?> targetType
     ) {
+        if (targetType == short.class || targetType == Short.class) {
+            if (num.doubleValue() > Short.MAX_VALUE || num.doubleValue() < Short.MIN_VALUE) {
+                throw new DocumentConversionException(String.format("Number %s is out of Short range (%d to %d)", num, Short.MIN_VALUE, Short.MAX_VALUE));
+            }
+            return num.shortValue();
+        }
+
+        if (targetType == byte.class || targetType == Byte.class) {
+            if (num.doubleValue() > Byte.MAX_VALUE || num.doubleValue() < Byte.MIN_VALUE) {
+                throw new DocumentConversionException(String.format("Number %s is out of Byte range (%d to %d)", num, Byte.MIN_VALUE, Byte.MAX_VALUE));
+            }
+            return num.byteValue();
+        }
+
         if (targetType == int.class || targetType == Integer.class) {
             if (num.doubleValue() > Integer.MAX_VALUE || num.doubleValue() < Integer.MIN_VALUE) {
                 throw new DocumentConversionException(String.format("Number %s is out of Integer range (%d to %d)", num, Integer.MIN_VALUE, Integer.MAX_VALUE));
@@ -102,6 +120,69 @@ public class DefaultConverter implements ConverterPort {
         }
 
         return num;
+    }
+
+    private Object convertString(
+            String stringValue,
+            Class<?> targetType
+    ) {
+        String trimmedValue = stringValue.trim();
+
+        if (targetType == boolean.class || targetType == Boolean.class) {
+            return parseBoolean(trimmedValue);
+        }
+
+        if (targetType == byte.class || targetType == Byte.class) {
+            return parseDecimal(trimmedValue).byteValueExact();
+        }
+
+        if (targetType == short.class || targetType == Short.class) {
+            return parseDecimal(trimmedValue).shortValueExact();
+        }
+
+        if (targetType == int.class || targetType == Integer.class) {
+            return parseDecimal(trimmedValue).intValueExact();
+        }
+
+        if (targetType == long.class || targetType == Long.class) {
+            return parseDecimal(trimmedValue).longValueExact();
+        }
+
+        if (targetType == float.class || targetType == Float.class) {
+            return parseDecimal(trimmedValue).floatValue();
+        }
+
+        if (targetType == double.class || targetType == Double.class) {
+            return parseDecimal(trimmedValue).doubleValue();
+        }
+
+        return stringValue;
+    }
+
+    private BigDecimal parseDecimal(String numericString) {
+        try {
+            return new BigDecimal(numericString);
+        } catch (NumberFormatException e) {
+            throw new DocumentConversionException(String.format("Cannot parse '%s' as numeric value", numericString));
+        }
+    }
+
+    private Boolean parseBoolean(String booleanString) {
+        if ("true".equalsIgnoreCase(booleanString) ||
+                "1".equals(booleanString) ||
+                "yes".equalsIgnoreCase(booleanString) ||
+                "y".equalsIgnoreCase(booleanString)) {
+            return true;
+        }
+
+        if ("false".equalsIgnoreCase(booleanString) ||
+                "0".equals(booleanString) ||
+                "no".equalsIgnoreCase(booleanString) ||
+                "n".equalsIgnoreCase(booleanString)) {
+            return false;
+        }
+
+        throw new DocumentConversionException(String.format("Cannot parse '%s' as boolean value", booleanString));
     }
 
     private BigDecimal convertNumberToBigDecimal(Number num) {
