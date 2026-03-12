@@ -7,19 +7,19 @@ import com.excelninja.domain.exception.EntityMappingException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class EntityMetadata<T> {
     private static final Logger logger = Logger.getLogger(EntityMetadata.class.getName());
-    private static final int MAX_CACHE_SIZE = 1000;
+    private static final int DEFAULT_MAX_CACHE_SIZE = 1000;
+    private static volatile int maxCacheSize = DEFAULT_MAX_CACHE_SIZE;
 
     private static final Map<Class<?>, EntityMetadata<?>> METADATA_CACHE =
         Collections.synchronizedMap(new LinkedHashMap<Class<?>, EntityMetadata<?>>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<Class<?>, EntityMetadata<?>> eldest) {
-                boolean shouldRemove = size() > MAX_CACHE_SIZE;
+                boolean shouldRemove = size() > maxCacheSize;
                 if (shouldRemove) {
                     logger.fine("[NINJA-EXCEL] Evicting metadata cache entry for: " + eldest.getKey().getName());
                 }
@@ -52,8 +52,16 @@ public class EntityMetadata<T> {
 
     @SuppressWarnings("unchecked")
     public static <T> EntityMetadata<T> of(Class<T> entityType) {
-        return (EntityMetadata<T>) METADATA_CACHE.computeIfAbsent(entityType,
-                key -> new EntityMetadata<>(entityType));
+        synchronized (METADATA_CACHE) {
+            EntityMetadata<?> cached = METADATA_CACHE.get(entityType);
+            if (cached != null) {
+                return (EntityMetadata<T>) cached;
+            }
+
+            EntityMetadata<T> metadata = new EntityMetadata<>(entityType);
+            METADATA_CACHE.put(entityType, metadata);
+            return metadata;
+        }
     }
 
     public T createInstance() {
@@ -99,12 +107,27 @@ public class EntityMetadata<T> {
         return METADATA_CACHE.size();
     }
 
+    static int getMaxCacheSize() {
+        return maxCacheSize;
+    }
+
     public static void clearCache() {
         METADATA_CACHE.clear();
     }
 
     public static void evictCache(Class<?> entityType) {
         METADATA_CACHE.remove(entityType);
+    }
+
+    static void setMaxCacheSizeForTesting(int newMaxCacheSize) {
+        if (newMaxCacheSize <= 0) {
+            throw new IllegalArgumentException("Max cache size must be positive");
+        }
+        maxCacheSize = newMaxCacheSize;
+    }
+
+    static void resetMaxCacheSizeForTesting() {
+        maxCacheSize = DEFAULT_MAX_CACHE_SIZE;
     }
 
     private Constructor<T> extractDefaultConstructor(Class<T> entityType) {

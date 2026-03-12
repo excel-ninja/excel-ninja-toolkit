@@ -330,7 +330,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](https:
 ExcelNinja is designed for high performance:
 
 - **Automatic Optimization**: Files >10MB automatically use streaming (SAX-based) for memory efficiency
-- **Metadata Caching**: Reflection metadata is cached using `ConcurrentHashMap` for thread-safety
+- **Metadata Caching**: Reflection metadata is cached in a thread-safe LRU cache (max 1000 entries)
 - **Chunk Processing**: Process large files in configurable chunks (default: 1000 rows)
 - **Built-in Metrics**: Automatic performance logging (records/sec, file size, duration)
 
@@ -350,8 +350,6 @@ While ExcelNinja is production-ready, please be aware of these known issues:
 1. **Date Format in Excel Output**: Excel date format uses lowercase `mm` which represents minutes instead of months. This may cause display issues in some cases. Will be fixed in next release.
 
 2. **String-to-Number Conversion**: Converting string values (e.g., `"123"`) to numeric types may fail in some edge cases. Workaround: Ensure Excel cells are properly formatted as numbers.
-
-3. **Streaming Threshold Configuration**: The `setStreamingThreshold()` method currently doesn't change the threshold due to implementation constraints. Use the default 10MB threshold for now.
 
 These issues are tracked and will be addressed in upcoming releases. For critical needs, please check our GitHub issues or contribute a fix!
 

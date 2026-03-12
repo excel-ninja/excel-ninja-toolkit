@@ -10,7 +10,8 @@ version = '1.0.1'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(23)
+        // Use an installed LTS JDK for builds while still emitting Java 8-compatible bytecode.
+        languageVersion = JavaLanguageVersion.of(17)
     }
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8

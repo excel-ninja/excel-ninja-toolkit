@@ -147,7 +147,7 @@ public final class NinjaExcel {
             return result;
         } catch (IOException e) {
             long duration = System.currentTimeMillis() - startTime;
-            logger.severe(String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration));
+            logger.log(Level.SEVERE, String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration), e);
             throw new DocumentConversionException("Failed to read Excel file: " + file.getName(), e);
         }
     }
@@ -195,7 +195,7 @@ public final class NinjaExcel {
             return result;
         } catch (IOException e) {
             long duration = System.currentTimeMillis() - startTime;
-            logger.severe(String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration));
+            logger.log(Level.SEVERE, String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration), e);
             throw new DocumentConversionException("Failed to read Excel file: " + file.getName(), e);
         }
     }
@@ -293,7 +293,7 @@ public final class NinjaExcel {
             return result;
         } catch (IOException e) {
             long duration = System.currentTimeMillis() - startTime;
-            logger.severe(String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration));
+            logger.log(Level.SEVERE, String.format("[NINJA-EXCEL] Failed to read Excel file: %s after %d ms", fileName, duration), e);
             throw new DocumentConversionException("Failed to read Excel file: " + file.getName(), e);
         }
     }
@@ -356,7 +356,7 @@ public final class NinjaExcel {
 
         } catch (IOException e) {
             long duration = System.currentTimeMillis() - startTime;
-            logger.severe(String.format("[NINJA-EXCEL] Failed to write Excel workbook: %s after %d ms", fileName, duration));
+            logger.log(Level.SEVERE, String.format("[NINJA-EXCEL] Failed to write Excel workbook: %s after %d ms", fileName, duration), e);
             throw new DocumentConversionException("Failed to write Excel workbook: " + fileName + ". Please check file permissions and available disk space.", e);
         }
     }
@@ -391,7 +391,7 @@ public final class NinjaExcel {
 
         } catch (IOException e) {
             long duration = System.currentTimeMillis() - startTime;
-            logger.severe(String.format("[NINJA-EXCEL] Failed to write Excel workbook to output stream after %d ms", duration));
+            logger.log(Level.SEVERE, String.format("[NINJA-EXCEL] Failed to write Excel workbook to output stream after %d ms", duration), e);
             throw new DocumentConversionException("Failed to write Excel workbook to output stream", e);
         }
     }

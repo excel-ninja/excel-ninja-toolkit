@@ -433,7 +433,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
                         try {
                             queue.put(convertRowToEntity(rowValues));
                         } catch (Exception e) {
-                            logger.warning("Failed to process or queue row: " + e.getMessage());
+                            logger.warning("[NINJA-EXCEL] Failed to process or queue row: " + e.getMessage());
                         }
                     }
                 }
