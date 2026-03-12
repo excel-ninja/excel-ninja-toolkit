@@ -200,21 +200,21 @@ public final class NinjaExcel {
         }
     }
 
-    public static <T> Iterator<List<T>> readInChunks(
+    public static <T> ChunkReader<T> readInChunks(
             String filePath,
             Class<T> clazz
     ) {
         return readInChunks(new File(filePath), clazz, DEFAULT_CHUNK_SIZE);
     }
 
-    public static <T> Iterator<List<T>> readInChunks(
+    public static <T> ChunkReader<T> readInChunks(
             File file,
             Class<T> clazz
     ) {
         return readInChunks(file, clazz, DEFAULT_CHUNK_SIZE);
     }
 
-    public static <T> Iterator<List<T>> readInChunks(
+    public static <T> ChunkReader<T> readInChunks(
             String filePath,
             Class<T> clazz,
             int chunkSize
@@ -222,7 +222,7 @@ public final class NinjaExcel {
         return readInChunks(new File(filePath), clazz, chunkSize);
     }
 
-    public static <T> Iterator<List<T>> readInChunks(
+    public static <T> ChunkReader<T> readInChunks(
             File file,
             Class<T> clazz,
             int chunkSize

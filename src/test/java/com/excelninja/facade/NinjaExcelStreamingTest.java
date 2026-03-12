@@ -4,6 +4,7 @@ import com.excelninja.application.facade.NinjaExcel;
 import com.excelninja.domain.annotation.ExcelReadColumn;
 import com.excelninja.domain.annotation.ExcelWriteColumn;
 import com.excelninja.domain.exception.DocumentConversionException;
+import com.excelninja.domain.model.ChunkReader;
 import com.excelninja.domain.model.ExcelSheet;
 import com.excelninja.domain.model.ExcelWorkbook;
 import com.excelninja.infrastructure.io.StreamingWorkbookReader;
@@ -343,7 +344,7 @@ class NinjaExcelStreamingTest {
         @DisplayName("청크 단위로 대용량 파일 처리")
         void shouldProcessLargeFileInChunks() {
             int chunkSize = 1000;
-            Iterator<List<Employee>> chunks = NinjaExcel.readInChunks(hugeFile, Employee.class, chunkSize);
+            ChunkReader<Employee> chunks = NinjaExcel.readInChunks(hugeFile, Employee.class, chunkSize);
 
             int totalProcessed = 0;
             int chunkCount = 0;
@@ -388,7 +389,7 @@ class NinjaExcelStreamingTest {
             long memoryBefore = runtime.totalMemory() - runtime.freeMemory();
 
             int processedRecords = 0;
-            Iterator<List<Employee>> chunks = NinjaExcel.readInChunks(hugeFile, Employee.class, 500);
+            ChunkReader<Employee> chunks = NinjaExcel.readInChunks(hugeFile, Employee.class, 500);
 
             while (chunks.hasNext()) {
                 List<Employee> chunk = chunks.next();
@@ -422,7 +423,7 @@ class NinjaExcelStreamingTest {
             int[] chunkSizes = {100, 500, 1000, 2000};
 
             for (int chunkSize : chunkSizes) {
-                Iterator<List<Employee>> chunks = NinjaExcel.readInChunks(largeFile, Employee.class, chunkSize);
+                ChunkReader<Employee> chunks = NinjaExcel.readInChunks(largeFile, Employee.class, chunkSize);
 
                 int chunkCount = 0;
                 int totalRecords = 0;
@@ -453,24 +454,27 @@ class NinjaExcelStreamingTest {
         @DisplayName("청크 처리 중 변환 오류는 예외로 전파된다")
         void shouldPropagateChunkConversionErrors() throws IOException {
             File invalidChunkFile = createInvalidChunkWorkbook("invalid_chunk.xlsx");
-            Iterator<List<StrictEmployee>> chunks = NinjaExcel.readInChunks(invalidChunkFile, StrictEmployee.class, 1);
-
-            try {
+            try (ChunkReader<StrictEmployee> chunks = NinjaExcel.readInChunks(invalidChunkFile, StrictEmployee.class, 1)) {
                 assertThatThrownBy(() -> {
                     while (chunks.hasNext()) {
                         chunks.next();
                     }
                 }).isInstanceOf(DocumentConversionException.class)
                         .hasMessageContaining("background producer thread");
-            } finally {
-                if (chunks instanceof AutoCloseable) {
-                    try {
-                        ((AutoCloseable) chunks).close();
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }
             }
+        }
+
+        @Test
+        @DisplayName("청크 리더는 try-with-resources로 조기 종료할 수 있다")
+        void shouldAllowTryWithResourcesForChunkReaders() {
+            int processed = 0;
+
+            try (ChunkReader<Employee> chunks = NinjaExcel.readInChunks(hugeFile, Employee.class, 1000)) {
+                assertThat(chunks.hasNext()).isTrue();
+                processed += chunks.next().size();
+            }
+
+            assertThat(processed).isEqualTo(1000);
         }
     }
 
@@ -625,29 +629,21 @@ class NinjaExcelStreamingTest {
             AtomicInteger totalProcessed = new AtomicInteger(0);
 
             for (int i = 0; i < 5; i++) {
-                Iterator<List<Employee>> chunks = NinjaExcel.readInChunks(hugeFile, Employee.class, 2000);
+                try (ChunkReader<Employee> chunks = NinjaExcel.readInChunks(hugeFile, Employee.class, 2000)) {
+                    int iterationCount = 0;
+                    while (chunks.hasNext()) {
+                        List<Employee> chunk = chunks.next();
+                        iterationCount += chunk.size();
 
-                int iterationCount = 0;
-                while (chunks.hasNext()) {
-                    List<Employee> chunk = chunks.next();
-                    iterationCount += chunk.size();
-
-                    chunk.forEach(emp -> {
-                        if (emp.getId() != null && emp.getName() != null) {
-                            totalProcessed.incrementAndGet();
-                        }
-                    });
-                }
-
-                System.out.printf("[STRESS-%d] Processed %d records%n", i + 1, iterationCount);
-                assertThat(iterationCount).isEqualTo(50000);
-
-                if (chunks instanceof AutoCloseable) {
-                    try {
-                        ((AutoCloseable) chunks).close();
-                    } catch (Exception e) {
-                        System.err.println("Failed to close iterator: " + e.getMessage());
+                        chunk.forEach(emp -> {
+                            if (emp.getId() != null && emp.getName() != null) {
+                                totalProcessed.incrementAndGet();
+                            }
+                        });
                     }
+
+                    System.out.printf("[STRESS-%d] Processed %d records%n", i + 1, iterationCount);
+                    assertThat(iterationCount).isEqualTo(50000);
                 }
             }
 

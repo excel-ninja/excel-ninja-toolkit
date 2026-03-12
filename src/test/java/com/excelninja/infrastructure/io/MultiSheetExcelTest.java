@@ -417,6 +417,35 @@ class MultiSheetExcelTest {
     }
 
     @Test
+    @DisplayName("메타데이터를 지정하지 않으면 createdDate를 임의 생성하지 않는다")
+    void workbookWithoutMetadataDoesNotFabricateCreatedDate() throws Exception {
+        List<UserDto> employees = Arrays.asList(
+                new UserDto(1L, "John Doe", 35, "john@company.com")
+        );
+
+        ExcelWorkbook workbook = ExcelWorkbook.builder()
+                .sheet("Employees", employees)
+                .build();
+
+        assertThat(workbook.getMetadata().getAuthor()).isNull();
+        assertThat(workbook.getMetadata().getTitle()).isNull();
+        assertThat(workbook.getMetadata().getCreatedDate()).isNull();
+
+        Path testFile = tempDir.resolve("company_report_without_metadata.xlsx");
+        NinjaExcel.write(workbook, testFile.toFile());
+
+        ExcelWorkbook poiReadWorkbook = new PoiWorkbookReader().read(testFile.toFile());
+        ExcelWorkbook streamingReadWorkbook = new StreamingWorkbookReader().read(testFile.toFile());
+
+        assertThat(poiReadWorkbook.getMetadata().getAuthor()).isNull();
+        assertThat(poiReadWorkbook.getMetadata().getTitle()).isNull();
+        assertThat(poiReadWorkbook.getMetadata().getCreatedDate()).isNull();
+        assertThat(streamingReadWorkbook.getMetadata().getAuthor()).isNull();
+        assertThat(streamingReadWorkbook.getMetadata().getTitle()).isNull();
+        assertThat(streamingReadWorkbook.getMetadata().getCreatedDate()).isNull();
+    }
+
+    @Test
     @DisplayName("빈 시트와 데이터가 있는 시트 혼합 처리")
     void mixEmptyAndNonEmptySheets() throws Exception {
         List<UserDto> activeUsers = Arrays.asList(

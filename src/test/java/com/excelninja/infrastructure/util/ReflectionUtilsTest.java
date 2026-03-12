@@ -122,7 +122,36 @@ class ReflectionUtilsTest {
         // When & Then
         assertThatThrownBy(() -> ReflectionUtils.setFieldValue(dto, field, "NotAnInteger"))
                 .isInstanceOf(DocumentConversionException.class)
-                .hasMessageContaining("Unexpected error setting field");
+                .hasMessageContaining("Invalid argument for setter method: age");
+    }
+
+    @Test
+    @DisplayName("Setter 내부 예외는 직접 전파되고 필드 직접 쓰기로 우회하지 않음")
+    void setFieldValueDoesNotBypassFailingSetter() {
+        // Given
+        TestDtoWithFailingSetter dto = new TestDtoWithFailingSetter();
+        Field field = getField(TestDtoWithFailingSetter.class, "name");
+
+        // When & Then
+        assertThatThrownBy(() -> ReflectionUtils.setFieldValue(dto, field, "Blocked"))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("Setter method threw exception for field: name")
+                .hasCauseInstanceOf(IllegalStateException.class);
+        assertThat(dto.name).isNull();
+    }
+
+    @Test
+    @DisplayName("Getter 내부 예외는 null로 숨기지 않고 직접 전파")
+    void getFieldValueDoesNotSuppressFailingGetter() {
+        // Given
+        TestDtoWithFailingGetter dto = new TestDtoWithFailingGetter();
+        Field field = getField(TestDtoWithFailingGetter.class, "name");
+
+        // When & Then
+        assertThatThrownBy(() -> ReflectionUtils.getFieldValue(dto, field))
+                .isInstanceOf(DocumentConversionException.class)
+                .hasMessageContaining("Getter method threw exception for field: name")
+                .hasCauseInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -251,6 +280,22 @@ class ReflectionUtilsTest {
 
     public static class TestDtoWithFinalField {
         private final String finalValue = "FINAL";
+    }
+
+    public static class TestDtoWithFailingSetter {
+        private String name;
+
+        public void setName(String name) {
+            throw new IllegalStateException("setter failure");
+        }
+    }
+
+    public static class TestDtoWithFailingGetter {
+        private String name = "Hidden";
+
+        public String getName() {
+            throw new IllegalStateException("getter failure");
+        }
     }
 
     public static class TestDtoWithPrivateField {

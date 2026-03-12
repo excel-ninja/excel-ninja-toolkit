@@ -3,6 +3,7 @@ package com.excelninja.infrastructure.util;
 import com.excelninja.domain.exception.DocumentConversionException;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,7 +26,9 @@ public class ReflectionUtils {
             throw new DocumentConversionException("Field cannot be null");
         }
 
-        if (trySetterMethod(instance, field, value)) {
+        Method setter = findSetterMethod(instance, field);
+        if (setter != null) {
+            invokeSetterMethod(instance, field, value, setter);
             return;
         }
 
@@ -44,92 +47,99 @@ public class ReflectionUtils {
             throw new DocumentConversionException("Field cannot be null");
         }
 
-        Object value = tryGetterMethod(instance, field);
-        if (value != null || hasGetterMethod(instance, field)) {
-            return value;
+        Method getter = findGetterMethod(instance, field);
+        if (getter != null) {
+            return invokeGetterMethod(instance, field, getter);
         }
 
         return getFieldValueDirectly(instance, field);
     }
 
-    private static boolean trySetterMethod(
+    private static Method findSetterMethod(
+            Object instance,
+            Field field
+    ) {
+        String setterName = "set" + capitalize(field.getName());
+        String methodKey = instance.getClass().getName() + "." + setterName;
+
+        return METHOD_CACHE.computeIfAbsent(methodKey, k -> {
+            try {
+                return instance.getClass().getMethod(setterName, field.getType());
+            } catch (NoSuchMethodException e) {
+                return null;
+            }
+        });
+    }
+
+    private static void invokeSetterMethod(
             Object instance,
             Field field,
-            Object value
+            Object value,
+            Method setter
     ) {
         try {
-            String setterName = "set" + capitalize(field.getName());
-            String methodKey = instance.getClass().getName() + "." + setterName;
-
-            Method setter = METHOD_CACHE.computeIfAbsent(methodKey, k -> {
-                try {
-                    return instance.getClass().getMethod(setterName, field.getType());
-                } catch (NoSuchMethodException e) {
-                    return null;
-                }
-            });
-
-            if (setter != null) {
-                if (!setter.isAccessible()) {
-                    try {
-                        setter.setAccessible(true);
-                    } catch (SecurityException e) {
-                        return false;
-                    }
-                }
-
-                setter.invoke(instance, value);
-                return true;
-            }
-        } catch (Exception e) {
-            return false;
+            ensureMethodAccessible(setter, "setter", field);
+            setter.invoke(instance, value);
+        } catch (IllegalAccessException e) {
+            throw new DocumentConversionException("Failed to access setter method for field: " + field.getName(), e);
+        } catch (IllegalArgumentException e) {
+            throw new DocumentConversionException(
+                    "Invalid argument for setter method: " + field.getName() +
+                            ". Value: " + value + ", Expected type: " + field.getType().getSimpleName(),
+                    e
+            );
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getTargetException() != null ? e.getTargetException() : e;
+            throw new DocumentConversionException("Setter method threw exception for field: " + field.getName(), cause);
         }
-        return false;
     }
 
-    private static Object tryGetterMethod(
+    private static Method findGetterMethod(
             Object instance,
             Field field
     ) {
-        try {
-            String getterName = getGetterName(field);
-            String methodKey = instance.getClass().getName() + "." + getterName;
+        String getterName = getGetterName(field);
+        String methodKey = instance.getClass().getName() + "." + getterName;
 
-            Method getter = METHOD_CACHE.computeIfAbsent(methodKey, k -> {
-                try {
-                    return instance.getClass().getMethod(getterName);
-                } catch (NoSuchMethodException e) {
-                    return null;
-                }
-            });
-
-            if (getter != null) {
-                if (!getter.isAccessible()) {
-                    try {
-                        getter.setAccessible(true);
-                    } catch (SecurityException e) {
-                        return null;
-                    }
-                }
-
-                return getter.invoke(instance);
+        return METHOD_CACHE.computeIfAbsent(methodKey, k -> {
+            try {
+                return instance.getClass().getMethod(getterName);
+            } catch (NoSuchMethodException e) {
+                return null;
             }
-        } catch (Exception e) {
-            return null;
-        }
-        return null;
+        });
     }
 
-    private static boolean hasGetterMethod(
+    private static Object invokeGetterMethod(
             Object instance,
-            Field field
+            Field field,
+            Method getter
     ) {
         try {
-            String getterName = getGetterName(field);
-            instance.getClass().getMethod(getterName);
-            return true;
-        } catch (NoSuchMethodException e) {
-            return false;
+            ensureMethodAccessible(getter, "getter", field);
+            return getter.invoke(instance);
+        } catch (IllegalAccessException e) {
+            throw new DocumentConversionException("Failed to access getter method for field: " + field.getName(), e);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getTargetException() != null ? e.getTargetException() : e;
+            throw new DocumentConversionException("Getter method threw exception for field: " + field.getName(), cause);
+        }
+    }
+
+    private static void ensureMethodAccessible(
+            Method method,
+            String accessorType,
+            Field field
+    ) {
+        if (!method.isAccessible()) {
+            try {
+                method.setAccessible(true);
+            } catch (SecurityException e) {
+                throw new DocumentConversionException(
+                        "Cannot access " + accessorType + " method for field: " + field.getName(),
+                        e
+                );
+            }
         }
     }
 

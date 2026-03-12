@@ -75,17 +75,16 @@ public class PoiWorkbookWriter implements WorkbookWriter {
         }
 
         POIXMLProperties.CoreProperties coreProperties = poiWorkbook.getProperties().getCoreProperties();
-        if (metadata.getAuthor() != null) {
-            coreProperties.setCreator(metadata.getAuthor());
-        }
-        if (metadata.getTitle() != null) {
-            coreProperties.setTitle(metadata.getTitle());
-        }
+        coreProperties.setCreator(metadata.getAuthor());
+        coreProperties.setTitle(metadata.getTitle());
 
         if (metadata.getCreatedDate() != null) {
             Date createdDate = Date.from(metadata.getCreatedDate().atZone(ZoneId.systemDefault()).toInstant());
             coreProperties.setCreated(Optional.of(createdDate));
             coreProperties.setModified(Optional.of(createdDate));
+        } else {
+            coreProperties.setCreated(Optional.empty());
+            coreProperties.setModified(Optional.empty());
         }
     }
 

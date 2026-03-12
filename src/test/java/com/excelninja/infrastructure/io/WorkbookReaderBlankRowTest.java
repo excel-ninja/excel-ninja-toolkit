@@ -1,6 +1,7 @@
 package com.excelninja.infrastructure.io;
 
 import com.excelninja.domain.annotation.ExcelReadColumn;
+import com.excelninja.domain.model.ChunkReader;
 import com.excelninja.domain.model.ExcelSheet;
 import com.excelninja.domain.model.ExcelWorkbook;
 import org.apache.poi.ss.usermodel.Row;
@@ -17,7 +18,6 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -74,15 +74,12 @@ class WorkbookReaderBlankRowTest {
     @DisplayName("Chunk reader does not emit empty entities for blank rows")
     void chunkReaderSkipsBlankRows() throws Exception {
         File workbookFile = createWorkbookWithBlankRows("chunk_blank_rows.xlsx");
-        Iterator<List<EmployeeRow>> chunks = new StreamingWorkbookReader().readInChunks(workbookFile, EmployeeRow.class, 1);
         List<EmployeeRow> rows = new ArrayList<>();
 
-        try {
+        try (ChunkReader<EmployeeRow> chunks = new StreamingWorkbookReader().readInChunks(workbookFile, EmployeeRow.class, 1)) {
             while (chunks.hasNext()) {
                 rows.addAll(chunks.next());
             }
-        } finally {
-            ((AutoCloseable) chunks).close();
         }
 
         assertThat(rows).hasSize(2);

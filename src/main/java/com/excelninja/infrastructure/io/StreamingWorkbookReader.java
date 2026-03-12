@@ -3,6 +3,7 @@ package com.excelninja.infrastructure.io;
 import com.excelninja.domain.exception.DocumentConversionException;
 import com.excelninja.domain.exception.HeaderMismatchException;
 import com.excelninja.domain.exception.InvalidDocumentStructureException;
+import com.excelninja.domain.model.ChunkReader;
 import com.excelninja.domain.model.ExcelSheet;
 import com.excelninja.domain.model.ExcelWorkbook;
 import com.excelninja.domain.model.Headers;
@@ -146,7 +147,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
         return true;
     }
 
-    public <T> Iterator<List<T>> readInChunks(
+    public <T> ChunkReader<T> readInChunks(
             File file,
             Class<T> entityType,
             int chunkSize
@@ -154,7 +155,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
         return new ChunkIterator<>(Files.newInputStream(file.toPath()), entityType, chunkSize, true);
     }
 
-    public <T> Iterator<List<T>> readInChunks(
+    public <T> ChunkReader<T> readInChunks(
             InputStream inputStream,
             Class<T> entityType,
             int chunkSize
@@ -272,7 +273,7 @@ public class StreamingWorkbookReader implements WorkbookReader {
         }
     }
 
-    private static class ChunkIterator<T> implements Iterator<List<T>>, AutoCloseable {
+    private static class ChunkIterator<T> implements ChunkReader<T> {
         private final int chunkSize;
         private final BlockingQueue<Object> queue = new LinkedBlockingQueue<>(20000); // Buffer size
         private final InputStream managedInputStream;

@@ -8,7 +8,7 @@ public class WorkbookMetadata {
     private final LocalDateTime createdDate;
 
     public WorkbookMetadata() {
-        this(null, null, LocalDateTime.now());
+        this(null, null, null);
     }
 
     public WorkbookMetadata(
@@ -18,7 +18,7 @@ public class WorkbookMetadata {
     ) {
         this.author = author;
         this.title = title;
-        this.createdDate = createdDate != null ? createdDate : LocalDateTime.now();
+        this.createdDate = createdDate;
     }
 
     public String getAuthor() {

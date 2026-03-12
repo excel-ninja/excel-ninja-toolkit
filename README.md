@@ -136,13 +136,14 @@ ExcelNinja automatically switches to streaming mode for large files (>10MB) to o
 
 ```java
 // For very large files, read in chunks
-Iterator<List<User>> chunks = NinjaExcel.readInChunks("large-file.xlsx", User.class, 1000);
-while (chunks.hasNext()) {
-    List<User> chunk = chunks.next();
-    // Process chunk
+try (ChunkReader<User> chunks = NinjaExcel.readInChunks("large-file.xlsx", User.class, 1000)) {
+    while (chunks.hasNext()) {
+        List<User> chunk = chunks.next();
+        // Process chunk
+    }
 }
 // Full iteration closes internal file resources automatically.
-// If you stop early, close the iterator when it implements AutoCloseable.
+// try-with-resources also closes safely when you stop early.
 
 // Read multiple specific sheets
 List<String> sheetsToRead = Arrays.asList("Users", "Customers");
